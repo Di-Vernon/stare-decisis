@@ -1,0 +1,582 @@
+# `myth-embed` — 임베딩 데몬
+
+## 역할
+
+multilingual-e5-small 임베딩 모델을 **메모리에 상주**시키는 self-daemonizing 단일 바이너리. myth 전체에서 임베딩이 필요할 때 Unix socket으로 요청을 받는다.
+
+**핵심 특성**:
+- **단일 바이너리**: `myth-embed`. 클라이언트/데몬 모드가 같은 바이너리.
+- **자동 관리**: ECONNREFUSED 감지 시 자동 spawn. 15분 유휴 시 자가 종료.
+- **bincode 프로토콜**: 효율·정밀도 보존.
+- **독립 crate**: 다른 crate와 IPC로만 소통. 약한 결합.
+
+**의존**: `myth-common`만.
+**의존받음**: 없음 (Unix socket 경유).
+
+## Cargo.toml
+
+```toml
+[package]
+name = "myth-embed"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+myth-common = { path = "../myth-common" }
+
+serde = { workspace = true }
+bincode = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+mimalloc = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+# 임베딩
+fastembed = { workspace = true }
+ort = { workspace = true }
+
+# Unix socket
+nix = { version = "0.28", features = ["fs"] }
+
+[[bin]]
+name = "myth-embed"
+path = "src/main.rs"
+```
+
+## 모듈 구조
+
+```
+crates/myth-embed/
+└── src/
+    ├── main.rs              # 클라이언트/데몬 모드 분기
+    ├── protocol/
+    │   ├── mod.rs
+    │   ├── wire.rs          # bincode 직렬화, length prefix framing
+    │   └── types.rs         # Request, Response, Op, OpResult
+    ├── client.rs            # 클라이언트 모드 로직 (자동 spawn 포함)
+    ├── daemon/
+    │   ├── mod.rs          # 데몬 모드 entry
+    │   ├── server.rs       # tokio UnixListener + 요청 처리
+    │   ├── model.rs        # fastembed-rs 상주
+    │   ├── idle.rs         # 15분 유휴 타이머
+    │   └── stats.rs        # 요청 수, 레이턴시, RSS
+    ├── spawn.rs             # self-fork-exec --daemon
+    ├── lock.rs              # flock (동시 spawn race 방지)
+    └── cli.rs               # status/stop/probe 서브커맨드
+```
+
+## 공개 프로토콜 (wire v1)
+
+**bincode + length prefix 프레이밍**.
+
+```rust
+// src/protocol/types.rs
+
+#[derive(Serialize, Deserialize)]
+pub struct Request {
+    pub version: u8,        // 1
+    pub id: Uuid,
+    pub op: Op,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Op {
+    Embed { text: String },
+    Ping,
+    Shutdown,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Response {
+    pub version: u8,        // 1
+    pub id: Uuid,
+    pub result: OpResult,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum OpResult {
+    Embedded { vector: Vec<f32> },  // 384 floats
+    Pong { 
+        uptime_secs: u64, 
+        request_count: u64, 
+        rss_bytes: u64 
+    },
+    ShuttingDown,
+    Error { message: String },
+}
+```
+
+### Framing
+
+```
+[u32 LE length] [bincode payload]
+```
+
+`length`는 payload 바이트 수. 최대 1MB로 제한 (임베딩 요청 크기 감안).
+
+```rust
+// src/protocol/wire.rs
+
+pub async fn write_message<W: AsyncWrite + Unpin, T: Serialize>(
+    w: &mut W, msg: &T
+) -> Result<()> {
+    let payload = bincode::serialize(msg)?;
+    let len = u32::try_from(payload.len())?;
+    w.write_u32_le(len).await?;
+    w.write_all(&payload).await?;
+    w.flush().await?;
+    Ok(())
+}
+
+pub async fn read_message<R: AsyncRead + Unpin, T: DeserializeOwned>(
+    r: &mut R
+) -> Result<T> {
+    let len = r.read_u32_le().await? as usize;
+    if len > 1_000_000 {
+        return Err(anyhow!("payload too large: {}", len));
+    }
+    let mut buf = vec![0u8; len];
+    r.read_exact(&mut buf).await?;
+    Ok(bincode::deserialize(&buf)?)
+}
+```
+
+## `main()` 분기
+
+```rust
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> ExitCode {
+    myth_common::logging::init_logging("myth-embed");
+    
+    let args: Vec<String> = std::env::args().collect();
+    
+    match args.get(1).map(|s| s.as_str()) {
+        Some("--daemon") => daemon::run().await,
+        Some("status") => cli::status().await,
+        Some("stop") => cli::stop().await,
+        Some("probe") => cli::probe(&args[2..]).await,
+        _ => client::run(&args[1..]).await,
+    }
+}
+```
+
+기본 호출 (인자 없거나 임의 인자): 클라이언트 모드.
+
+## 클라이언트 모드
+
+```rust
+// src/client.rs
+
+pub async fn run(args: &[String]) -> ExitCode {
+    // stdin에서 bincode Request 읽음 (다른 myth 바이너리가 호출)
+    let mut stdin = tokio::io::stdin();
+    let request: Request = read_message(&mut stdin).await.unwrap();
+    
+    let response = query_daemon(request).await;
+    
+    let mut stdout = tokio::io::stdout();
+    write_message(&mut stdout, &response).await.unwrap();
+    
+    ExitCode::SUCCESS
+}
+
+async fn query_daemon(req: Request) -> Response {
+    let socket_path = myth_common::embed_socket_path();
+    
+    // 1차 시도
+    match try_connect(&socket_path, &req).await {
+        Ok(resp) => return resp,
+        Err(e) => {
+            tracing::debug!("first connect failed: {}", e);
+        }
+    }
+    
+    // ECONNREFUSED → self-spawn 시도
+    if should_skip_autospawn() {
+        return Response::error(&req.id, "daemon unavailable and --no-embed-daemon set");
+    }
+    
+    match spawn::spawn_daemon().await {
+        Ok(()) => {
+            // 최대 2초 대기하며 재시도
+            for _ in 0..20 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if let Ok(resp) = try_connect(&socket_path, &req).await {
+                    return resp;
+                }
+            }
+            Response::error(&req.id, "daemon spawn timeout")
+        }
+        Err(e) => Response::error(&req.id, &format!("spawn failed: {}", e)),
+    }
+}
+
+async fn try_connect(socket_path: &Path, req: &Request) -> Result<Response> {
+    let mut stream = UnixStream::connect(socket_path).await?;
+    write_message(&mut stream, req).await?;
+    let resp: Response = read_message(&mut stream).await?;
+    Ok(resp)
+}
+
+fn should_skip_autospawn() -> bool {
+    std::env::var("MYTH_NO_EMBED_DAEMON").is_ok() 
+        || std::env::args().any(|a| a == "--no-embed-daemon")
+}
+```
+
+### 고수준 클라이언트 API (library)
+
+다른 crate가 쓰는 간편 API:
+
+```rust
+// src/client.rs (pub API)
+
+pub struct EmbedClient {
+    socket_path: PathBuf,
+}
+
+impl EmbedClient {
+    pub fn new() -> Self {
+        Self { socket_path: myth_common::embed_socket_path() }
+    }
+    
+    pub fn embed(&self, text: &str) -> Result<[f32; 384]> {
+        // sync wrapper (다른 crate는 대부분 sync)
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        
+        rt.block_on(async {
+            let req = Request {
+                version: 1,
+                id: Uuid::new_v4(),
+                op: Op::Embed { text: text.to_string() },
+            };
+            let resp = query_daemon(req).await;
+            match resp.result {
+                OpResult::Embedded { vector } => {
+                    vector.try_into().map_err(|_| anyhow!("vector wrong dim"))
+                }
+                OpResult::Error { message } => Err(anyhow!("embed error: {}", message)),
+                _ => Err(anyhow!("unexpected response")),
+            }
+        })
+    }
+}
+```
+
+`myth-identity`의 Tier 2 matcher가 사용.
+
+## 데몬 모드 (`--daemon`)
+
+```rust
+// src/daemon/mod.rs
+
+pub async fn run() -> ExitCode {
+    // 1. flock 획득
+    let lock = lock::acquire().await.expect("another daemon instance running");
+    
+    let socket_path = myth_common::embed_socket_path();
+    
+    // 2. 스테일 소켓 unlink
+    let _ = std::fs::remove_file(&socket_path);
+    
+    // 3. 부모 디렉토리 생성 (0700)
+    std::fs::create_dir_all(socket_path.parent().unwrap())?;
+    
+    // 4. 모델 로드 (500ms~2s)
+    tracing::info!("loading multilingual-e5-small");
+    let model = model::load().await?;
+    tracing::info!("model loaded, listening on {:?}", socket_path);
+    
+    // 5. Unix socket bind
+    let listener = UnixListener::bind(&socket_path)?;
+    // mode 0600 설정
+    std::fs::set_permissions(&socket_path, Permissions::from_mode(0o600))?;
+    
+    // 6. 상태·타이머 초기화
+    let stats = Arc::new(Stats::new());
+    let idle = Arc::new(IdleTracker::new(Duration::from_secs(15 * 60)));
+    
+    // 7. 이벤트 루프
+    loop {
+        tokio::select! {
+            Ok((stream, _)) = listener.accept() => {
+                let model = model.clone();
+                let stats = stats.clone();
+                let idle = idle.clone();
+                tokio::spawn(async move {
+                    handle_client(stream, model, stats, idle).await
+                });
+            }
+            _ = idle.wait_for_timeout() => {
+                tracing::info!("idle shutdown");
+                break;
+            }
+        }
+    }
+    
+    // 8. graceful shutdown
+    drop(listener);
+    let _ = std::fs::remove_file(&socket_path);
+    drop(lock);
+    
+    ExitCode::SUCCESS
+}
+
+async fn handle_client(
+    mut stream: UnixStream,
+    model: Arc<Model>,
+    stats: Arc<Stats>,
+    idle: Arc<IdleTracker>,
+) -> Result<()> {
+    let req: Request = read_message(&mut stream).await?;
+    idle.bump();
+    stats.inc_request();
+    
+    let start = Instant::now();
+    let result = match req.op {
+        Op::Embed { text } => {
+            match model.embed(&text).await {
+                Ok(vector) => OpResult::Embedded { vector: vector.to_vec() },
+                Err(e) => OpResult::Error { message: e.to_string() },
+            }
+        }
+        Op::Ping => OpResult::Pong {
+            uptime_secs: stats.uptime_secs(),
+            request_count: stats.request_count(),
+            rss_bytes: get_rss_bytes(),
+        },
+        Op::Shutdown => {
+            tokio::spawn(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                std::process::exit(0);
+            });
+            OpResult::ShuttingDown
+        }
+    };
+    
+    let response = Response { version: 1, id: req.id, result };
+    write_message(&mut stream, &response).await?;
+    
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+    tracing::debug!("request handled in {:.2}ms", elapsed_ms);
+    Ok(())
+}
+```
+
+### `daemon/model.rs`
+
+```rust
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+
+pub struct Model {
+    inner: Arc<TextEmbedding>,
+}
+
+impl Model {
+    pub async fn load() -> Result<Arc<Self>> {
+        // blocking task로 로드 (fastembed-rs는 sync)
+        let model = tokio::task::spawn_blocking(|| {
+            TextEmbedding::try_new(InitOptions {
+                model_name: EmbeddingModel::MultilingualE5Small,
+                cache_dir: myth_common::myth_home().join("embeddings/models"),
+                ..Default::default()
+            })
+        }).await??;
+        
+        Ok(Arc::new(Self { inner: Arc::new(model) }))
+    }
+    
+    pub async fn embed(&self, text: &str) -> Result<[f32; 384]> {
+        let text = text.to_string();
+        let model = self.inner.clone();
+        
+        tokio::task::spawn_blocking(move || {
+            let docs = vec![&text[..]];
+            let embeddings = model.embed(docs, None)?;
+            let vec: Vec<f32> = embeddings.into_iter().next().unwrap();
+            vec.try_into().map_err(|_| anyhow!("wrong dim"))
+        }).await?
+    }
+}
+```
+
+### `daemon/idle.rs`
+
+```rust
+pub struct IdleTracker {
+    last_activity: Mutex<Instant>,
+    timeout: Duration,
+    notify: Notify,
+}
+
+impl IdleTracker {
+    pub fn new(timeout: Duration) -> Self {
+        Self {
+            last_activity: Mutex::new(Instant::now()),
+            timeout,
+            notify: Notify::new(),
+        }
+    }
+    
+    pub fn bump(&self) {
+        *self.last_activity.lock().unwrap() = Instant::now();
+        self.notify.notify_waiters();
+    }
+    
+    pub async fn wait_for_timeout(&self) {
+        loop {
+            let last = *self.last_activity.lock().unwrap();
+            let elapsed = last.elapsed();
+            
+            if elapsed >= self.timeout {
+                return;
+            }
+            
+            let remaining = self.timeout - elapsed;
+            tokio::select! {
+                _ = tokio::time::sleep(remaining) => {}
+                _ = self.notify.notified() => {}  // bump되면 다시 체크
+            }
+        }
+    }
+}
+```
+
+## `spawn.rs` — self-fork-exec
+
+```rust
+pub async fn spawn_daemon() -> Result<()> {
+    let exe = std::env::current_exe()?;
+    
+    // flock으로 경쟁 확인
+    let _ = lock::try_acquire()?;  // 실패 시 이미 다른 프로세스가 spawn 중
+    
+    let mut cmd = tokio::process::Command::new(&exe);
+    cmd.arg("--daemon")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(std::fs::File::create(
+            myth_common::myth_state().join("embed-daemon.log")
+        )?);
+    
+    // daemon은 부모에게서 detach
+    unsafe {
+        cmd.pre_exec(|| {
+            nix::unistd::setsid().map_err(|e| std::io::Error::from(e))?;
+            Ok(())
+        });
+    }
+    
+    cmd.spawn()?;
+    // 부모는 즉시 반환. daemon은 독립 실행.
+    Ok(())
+}
+```
+
+## `cli.rs` — status/stop/probe
+
+```rust
+pub async fn status() -> ExitCode {
+    let client = EmbedClient::new();
+    let req = Request { version: 1, id: Uuid::new_v4(), op: Op::Ping };
+    
+    match client.query(req).await {
+        Ok(Response { result: OpResult::Pong { uptime_secs, request_count, rss_bytes }, .. }) => {
+            println!("myth-embed daemon");
+            println!("  Socket:    {:?}", myth_common::embed_socket_path());
+            println!("  Uptime:    {}s", uptime_secs);
+            println!("  Requests:  {}", request_count);
+            println!("  RSS:       {:.1} MB", rss_bytes as f64 / 1024.0 / 1024.0);
+            ExitCode::SUCCESS
+        }
+        _ => {
+            println!("myth-embed daemon is not running");
+            ExitCode::from(1)
+        }
+    }
+}
+
+pub async fn stop() -> ExitCode {
+    let client = EmbedClient::new();
+    let req = Request { version: 1, id: Uuid::new_v4(), op: Op::Shutdown };
+    match client.query(req).await {
+        Ok(_) => {
+            println!("myth-embed daemon stopping");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            ExitCode::from(1)
+        }
+    }
+}
+
+pub async fn probe(args: &[String]) -> ExitCode {
+    let text = args.join(" ");
+    if text.is_empty() {
+        eprintln!("usage: myth-embed probe <text>");
+        return ExitCode::from(2);
+    }
+    
+    let client = EmbedClient::new();
+    match client.embed(&text) {
+        Ok(vector) => {
+            println!("Text: {}", text);
+            println!("Vector (first 5): {:?}", &vector[..5]);
+            println!("Norm: {:.4}", vector_norm(&vector));
+            println!("Dim: {}", vector.len());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            ExitCode::from(1)
+        }
+    }
+}
+```
+
+## 성능·관찰성
+
+**예산**:
+- 첫 `Embed` 요청 (콜드 spawn 포함): 500~2000ms
+- 이후 요청 (hot): 8~15ms (multilingual-e5-small 추론)
+- `Ping`: <1ms
+- Unix socket round-trip 오버헤드: ~100μs (bincode) + ~100μs (프로세스 간)
+
+**로그** — `~/.local/state/myth/embed-daemon.log` (JSON Lines):
+
+```
+{"ts":"2026-04-19T14:23:45Z","level":"info","msg":"loading multilingual-e5-small"}
+{"ts":"2026-04-19T14:23:47Z","level":"info","msg":"model loaded","took_ms":1823}
+{"ts":"2026-04-19T14:23:48Z","level":"debug","msg":"request","op":"Embed","text_len":234,"latency_ms":12}
+```
+
+## 테스트
+
+```
+tests/
+├── protocol_roundtrip.rs   # bincode 직렬화 왕복
+├── daemon_lifecycle.rs     # spawn → serve → idle shutdown
+├── concurrent_clients.rs   # N개 클라 동시 요청
+├── spawn_race.rs           # 동시 spawn 경쟁 → flock 정상 작동
+└── probe_cli.rs            # probe 명령 출력 형식
+```
+
+## 관련 결정
+
+- Decision 2: multilingual-e5-small 모델
+- Decision 6: self-daemonizing, bincode 프로토콜
+- Decision 7: The Gavel은 별도 daemon (Milestone C), myth-embed와 독립
+- ARCHITECTURE §5: embed daemon 아키텍처 상세
+
+## 관련 문서
+
+- `~/myth/PROTOCOL.md`: wire protocol 공식 스펙 (이 문서보다 상세)
