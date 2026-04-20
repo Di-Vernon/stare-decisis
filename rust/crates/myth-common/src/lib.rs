@@ -13,5 +13,6 @@ pub mod types;
 
 pub use error::{MythError, Result};
 pub use ids::{LessonId, ReminderId, SessionId};
+pub use paths::*;
 pub use time::{format_iso, now, Timestamp};
 pub use types::{Category, Enforcement, IdentityHash, Level, Recurrence};

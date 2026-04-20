@@ -63,13 +63,19 @@ pub trait LessonStore {
     fn mark_status(&self, id: LessonId, status: LessonStatus) -> anyhow::Result<()>;
 }
 
-pub struct SqliteLessonStore<'a> {
-    db: &'a Database,
+pub struct SqliteLessonStore {
+    db: Database,
 }
 
-impl<'a> SqliteLessonStore<'a> {
-    pub fn new(db: &'a Database) -> Self {
+impl SqliteLessonStore {
+    pub fn new(db: Database) -> Self {
         Self { db }
+    }
+
+    /// Access the underlying database for operations outside
+    /// `LessonStore` (e.g. `events::insert`, `appeal::file_appeal`).
+    pub fn db(&self) -> &Database {
+        &self.db
     }
 }
 
@@ -83,7 +89,7 @@ fn category_sql(c: Category) -> &'static str {
     }
 }
 
-impl LessonStore for SqliteLessonStore<'_> {
+impl LessonStore for SqliteLessonStore {
     fn insert(&self, lesson: &Lesson) -> anyhow::Result<LessonId> {
         self.db
             .conn

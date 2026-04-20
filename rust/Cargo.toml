@@ -54,6 +54,9 @@ dirs = "5"
 libc = "0.2"
 fs2 = "0.4"
 
+# Unix (setsid, flock for embed daemon)
+nix = { version = "0.28", features = ["fs"] }
+
 # Dev-only
 tempfile = "3"
 

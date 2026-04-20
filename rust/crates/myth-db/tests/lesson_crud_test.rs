@@ -26,7 +26,7 @@ fn sample_lesson() -> Lesson {
 fn insert_and_get_roundtrip() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
 
     let lesson = sample_lesson();
     let id = store.insert(&lesson).unwrap();
@@ -44,7 +44,7 @@ fn insert_and_get_roundtrip() {
 fn find_by_identity_returns_lesson() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
 
     let lesson = sample_lesson();
     store.insert(&lesson).unwrap();
@@ -59,7 +59,7 @@ fn find_by_identity_returns_lesson() {
 fn increment_recurrence_persists() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
 
     let lesson = sample_lesson();
     let id = store.insert(&lesson).unwrap();
@@ -74,7 +74,7 @@ fn increment_recurrence_persists() {
 fn update_mutates_fields() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
 
     let mut lesson = sample_lesson();
     let id = store.insert(&lesson).unwrap();
@@ -91,7 +91,7 @@ fn update_mutates_fields() {
 fn mark_status_moves_between_lists() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
 
     let lesson = sample_lesson();
     let id = store.insert(&lesson).unwrap();
@@ -107,7 +107,7 @@ fn mark_status_moves_between_lists() {
 fn get_missing_returns_none() {
     let dir = tempdir().unwrap();
     let db = Database::open(&dir.path().join("t.db")).unwrap();
-    let store = SqliteLessonStore::new(&db);
+    let store = SqliteLessonStore::new(db);
     let random = LessonId::new();
     assert!(store.get(random).unwrap().is_none());
 }

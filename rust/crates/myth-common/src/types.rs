@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Severity level 1–5 (Constitution Part V — Rubric).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Level {
     Info = 1,
@@ -26,7 +26,7 @@ impl Level {
 }
 
 /// Recurrence bucket I–VI (Constitution Part VI).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Recurrence {
     I = 1,

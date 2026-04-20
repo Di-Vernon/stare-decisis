@@ -7,3 +7,13 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+myth-common = { path = "../myth-common" }
+myth-db = { path = "../myth-db" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+regex = { workspace = true }
+rusqlite = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
