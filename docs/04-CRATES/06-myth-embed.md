@@ -68,6 +68,50 @@ path = "src/main.rs"
 > ExecutionProvider) 그 시점에 exact-match 버전(`=2.0.0-rc.NN`)으로
 > 다시 도입한다.
 
+> **v0.1 Task 2.2 사전 API 확인 — fastembed rustls 전환** (Jeffrey 승인 2026-04-19)
+>
+> fastembed 5.13.2의 **기본 features**는 `hf-hub-native-tls`,
+> `ort-download-binaries-native-tls`, `image-models` 세 가지다. 앞 두
+> feature는 `openssl-sys`를 요구 → `libssl-dev` 시스템 패키지 필수 →
+> `WSL2-SETUP.md` prerequisite 목록 증가 + `install.sh`가 `sudo apt`
+> 경로 의존. myth의 "self-contained Rust build" 철학과 충돌.
+>
+> 해결: `default-features = false` + rustls 계열 features 3개만 명시:
+>
+> ```toml
+> fastembed = { version = "5", default-features = false, features = [
+>     "hf-hub",
+>     "hf-hub-rustls-tls",
+>     "ort-download-binaries-rustls-tls",
+> ] }
+> ```
+>
+> 이 조합의 효과:
+> - 시스템 openssl 의존성 제거 → self-contained Rust 빌드
+> - `WSL2-SETUP.md` prerequisite 목록 불변
+> - Supply-chain audit 범위가 Rust crate만으로 축소
+> - `install.sh`가 `sudo` 없이 동작
+>
+> `image-models` 제외 근거: `multilingual-e5-small`은 text-only 모델이라
+> `image` crate 의존성이 불필요. 컴파일 시간·바이너리 크기·audit surface
+> 전부 감소.
+>
+> 버전 범위 `"5"`는 유지. 실제 설치 버전은 `Cargo.lock`이 5.13.2로 고정.
+> 업그레이드는 `cargo update -p fastembed`로 의도적으로만 수행.
+>
+> **⚠️ `ort-download-binaries` feature 함정 주의**
+>
+> fastembed 5.13.2의 `ort-download-binaries` feature는 이름이 중립적이지만
+> 내부 정의가 `["ort-download-binaries-native-tls"]`로 **native-tls를
+> 강제 활성화**한다. rustls 빌드를 원하면서 features에
+> `ort-download-binaries`를 추가하면 `libssl-dev`가 다시 요구되어
+> 의도와 반대 효과가 난다.
+>
+> 올바른 방식: **`ort-download-binaries-rustls-tls`만 사용**.
+> 이 feature가 내부적으로 `ort/download-binaries` + `ort/tls-rustls`를
+> 모두 활성화하므로 중간 단계 `ort-download-binaries` 추가는 불필요하고
+> 해롭다. 위 3-feature 조합은 이 함정을 회피한 결과다.
+
 ## 모듈 구조
 
 ```

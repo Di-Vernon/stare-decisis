@@ -250,8 +250,12 @@ mimalloc = { version = "0.1", default-features = false }
 memmap2 = "0.9"
 simsimd = "4"
 
-# 임베딩
-fastembed = "5"
+# 임베딩 (rustls TLS to avoid libssl-dev system dependency — see 06-myth-embed.md change box)
+fastembed = { version = "5", default-features = false, features = [
+    "hf-hub",
+    "hf-hub-rustls-tls",
+    "ort-download-binaries-rustls-tls",
+] }
 # ort: transitive via fastembed (no direct workspace entry — see 06-myth-embed.md change box)
 
 # TUI

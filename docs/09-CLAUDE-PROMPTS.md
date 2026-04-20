@@ -125,7 +125,11 @@ tokio = { version = "1", default-features = false, features = ["rt", "io-util", 
 mimalloc = { version = "0.1", default-features = false }
 memmap2 = "0.9"
 simsimd = "4"
-fastembed = "5"
+fastembed = { version = "5", default-features = false, features = [
+    "hf-hub",
+    "hf-hub-rustls-tls",
+    "ort-download-binaries-rustls-tls",
+] }
 # ort: transitive via fastembed (removed from workspace per 2026-04-19 review — see docs/04-CRATES/06-myth-embed.md change box)
 ratatui = "0.26"
 crossterm = "0.27"
