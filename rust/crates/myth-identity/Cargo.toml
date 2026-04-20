@@ -7,3 +7,22 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+myth-common = { path = "../myth-common" }
+myth-db = { path = "../myth-db" }
+# myth-embed is depended on for its protocol::types only — see
+# docs/04-CRATES/00-overview.md change box "myth-embed independence scope"
+# (commit 6f42254). Actual embedding calls flow over the Unix socket.
+myth-embed = { path = "../myth-embed" }
+
+sha1 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+memmap2 = { workspace = true }
+regex = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

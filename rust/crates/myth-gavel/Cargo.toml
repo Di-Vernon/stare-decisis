@@ -15,5 +15,12 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true }
+# SHA1 for identity hashing from (rule_id, matched_text) in grid_path.
+# Kept self-contained in myth-gavel so it does not depend on
+# myth-identity (same Layer 2 — no cross-peer dependency).
+sha1 = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
