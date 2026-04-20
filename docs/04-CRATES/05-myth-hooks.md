@@ -278,6 +278,25 @@ pub fn classify_deterministic(input: &PostToolFailureInput) -> Option<Determinis
 
 Tier 1이 발동한 뒤 다음 턴에 Claude가 실제로 Assessor Task를 호출했는지 검증.
 
+> **v0.1 Task 3.2 단순화** (Jeffrey 승인 2026-04-21)
+>
+> Day-1 user-prompt bin은 **read-only scan**만 수행한다:
+>
+> - `~/.myth/lesson-state.jsonl`의 존재·라인 수만 확인 (tracing::debug)
+> - transcript 파싱 + tool_use 감시 + compliant/missed 상태 기록은 **구현하지 않음**
+>
+> 이유 3가지:
+> 1. compliant 판정의 선행 조건 — `post-tool-failure`가 `pending_reflection` 레코드를
+>    먼저 생성해야 — 는 Task 3.5에서 완성된다. Task 3.2 시점에는 비교할 pending record가
+>    아직 없다.
+> 2. transcript(JSONL) 파싱은 Claude Code 2.1.x의 내부 형식 실측이 별도로 필요하다. Wave 3
+>    범위에 포함 여부는 Task 3.6에서 재검토.
+> 3. H2 (실측: UserPromptSubmit에 `turn_number` 없음) — 원안의 `turn_n` 기반 매칭은
+>    재설계 필요. Task 3.5/3.6에서 실제 데이터 구조 확정 후 구현.
+>
+> 아래 의사코드는 **Milestone A 이후 목표 형태**로 남겨둔다. Day-1 실구현은 위 두 줄
+> (존재 확인 + 라인 수 로그)만.
+
 ```rust
 fn run() -> HookResult {
     let input = read_hook_input()?;
