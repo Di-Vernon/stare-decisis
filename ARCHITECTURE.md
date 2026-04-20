@@ -88,15 +88,22 @@ stdout:
 
 ### Contract 4 — Environment Variables
 
-myth가 **읽는** 환경 변수 (Claude Code 설정):
+myth가 **읽는** 환경 변수 (Claude Code 2.1.114 실측 기준):
 
 ```
-CLAUDE_PROJECT_DIR         # 현재 프로젝트 루트
-CLAUDE_FILE_PATHS          # tool이 다룬 파일 경로
-CLAUDE_TOOL_INPUT          # tool input JSON
-CLAUDE_TRANSCRIPT_PATH     # 세션 transcript 파일
-CLAUDECODE=1               # Claude Code 실행 중임을 알림
+CLAUDECODE=1                  # Claude Code 하에서 실행 중임을 나타내는 플래그
+CLAUDE_CODE_ENTRYPOINT        # 예: "sdk-cli", interactive 등 진입 방식
+CLAUDE_CODE_EXECPATH          # claude 바이너리의 절대 경로
+CLAUDE_PROJECT_DIR            # 현재 프로젝트 루트 (= stdin JSON의 cwd와 동일)
+CLAUDE_ENV_FILE               # SessionStart hook 전용, session-env shell 경로
 ```
+
+**primary 소스는 stdin JSON**. `CLAUDE_TRANSCRIPT_PATH`, `CLAUDE_SESSION_ID`,
+`CLAUDE_HOOK_EVENT`, `CLAUDE_TOOL_INPUT`, `CLAUDE_FILE_PATHS` 등 초안에
+있던 변수는 **실제로 환경변수로 주입되지 않는다**. 동일 정보는 stdin
+JSON의 `session_id` / `transcript_path` / `hook_event_name` / `tool_input`
+필드로 제공된다. myth hook 바이너리는 stdin 파싱이 주 경로, 환경변수는
+플래그·경로 용도. 상세는 `docs/06-HOOKS.md §환경 변수` 참조.
 
 myth가 **쓰는/사용하는** 환경 변수:
 
@@ -105,6 +112,7 @@ MYTH_SESSION_ID            # UUID, 세션당 고유
 MYTH_CORRELATION_ID        # reminder_id (Assessor trigger 추적)
 CLAUDE_REVIEW_ACTIVE       # 재귀 hook 호출 방지 플래그
 MYTH_DISABLE               # myth 비활성 모드 (디버깅)
+MYTH_NO_EMBED_DAEMON       # embed daemon 비활성 (fallback only)
 MYTH_ANTHROPIC_API_KEY     # Tier 3 증축 시 (fallback: ~/.config/myth/api_key)
 ```
 

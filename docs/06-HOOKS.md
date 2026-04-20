@@ -325,21 +325,46 @@ myth는 **예외 상황에서만 exit 2**. hook 내부 에러는 항상 exit 0 +
 
 ## 환경 변수 (Claude Code → hook)
 
-Claude Code가 hook 프로세스에 주입하는 환경변수:
+Claude Code 2.1.114가 실제로 hook 프로세스에 주입하는 환경변수 (실측):
 
 ```bash
-CLAUDE_PROJECT_DIR=/home/miirr/project/myapp
-CLAUDE_TRANSCRIPT_PATH=/path/to/transcript.jsonl
-CLAUDE_SESSION_ID=uuid
-CLAUDECODE=1
-CLAUDE_HOOK_EVENT=PreToolUse
-# tool_input이 단순한 경우:
-CLAUDE_TOOL_INPUT='{"command":"ls"}'
-# 파일 경로가 있으면:
-CLAUDE_FILE_PATHS='/path/1:/path/2'
+CLAUDECODE=1                     # Claude Code 하에서 실행 중임을 나타내는 플래그
+CLAUDE_CODE_ENTRYPOINT=sdk-cli   # (또는 interactive 등) 진입 방식
+CLAUDE_CODE_EXECPATH=...         # claude 바이너리의 절대 경로
+CLAUDE_PROJECT_DIR=/path/to/project   # 현재 프로젝트 루트 (= stdin JSON의 cwd와 동일)
+# SessionStart hook에만 추가로:
+CLAUDE_ENV_FILE=/home/<user>/.claude/session-env/<session>/sessionstart-hook-0.sh
+# 시스템 env:
+XDG_RUNTIME_DIR=/run/user/<uid>/
+XDG_DATA_DIRS=...
 ```
 
-stdin JSON과 환경변수 **둘 다 제공**. myth는 stdin을 primary로, 환경변수는 보조 (e.g. cwd 검증).
+**primary 소스는 stdin JSON**. 초안이 제시한 `CLAUDE_TRANSCRIPT_PATH`, `CLAUDE_SESSION_ID`, `CLAUDE_HOOK_EVENT`, `CLAUDE_TOOL_INPUT`, `CLAUDE_FILE_PATHS` 등은 **환경변수에 존재하지 않는다**. 해당 정보는 모두 stdin JSON의 필드로 이동했다:
+
+| 초안 env | 실제 정보 위치 |
+|---|---|
+| `CLAUDE_TRANSCRIPT_PATH` | stdin JSON `transcript_path` |
+| `CLAUDE_SESSION_ID` | stdin JSON `session_id` |
+| `CLAUDE_HOOK_EVENT` | stdin JSON `hook_event_name` |
+| `CLAUDE_TOOL_INPUT` | stdin JSON `tool_input` (객체) |
+| `CLAUDE_FILE_PATHS` | 해당 없음 — `tool_input`의 필드로 접근 |
+
+myth hook 바이너리는 **stdin JSON 파싱을 주된 입력 경로로** 구현한다. 환경변수는 다음 용도에 한정:
+- `CLAUDECODE`: myth 실행 여부 확인
+- `CLAUDE_PROJECT_DIR`: 프로젝트 루트 가드(stdin `cwd`와 교차 검증)
+- `CLAUDE_CODE_EXECPATH`: 필요 시 claude 바이너리 재호출(Day-1에는 미사용)
+- `CLAUDE_ENV_FILE` (SessionStart 전용): 아직 Day-1 사용 계획 없음. Task 3.2 구현 중 필요 발견 시 추가 실측.
+
+> **v0.1 Task 3 사전 실측 — 환경변수 소스 전환** (Jeffrey 승인 2026-04-21, Claude Code 2.1.114)
+>
+> 초안 env 목록(7개)과 실측 결과(4개 + SessionStart 전용 1개)의 차이가
+> 단순 누락이 아니라 **primary source의 아키텍처 전환**이다:
+>
+> - **제거**: `CLAUDE_TRANSCRIPT_PATH / CLAUDE_SESSION_ID / CLAUDE_HOOK_EVENT / CLAUDE_TOOL_INPUT / CLAUDE_FILE_PATHS` — 전부 env에 없음. 동일 정보가 stdin JSON의 필드로 존재.
+> - **신규**: `CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_EXECPATH` — 모든 hook에, `CLAUDE_ENV_FILE` — SessionStart에만.
+> - **유지**: `CLAUDECODE / CLAUDE_PROJECT_DIR`.
+>
+> 즉 Claude Code 2.1.x는 "env via shell" 방식에서 "structured JSON on stdin" 방식으로 이동했다. myth hook 구현은 stdin JSON 파서를 1차 소스로 삼고, env는 boolean 플래그·경로 정도로만 활용. `ARCHITECTURE.md` Contract 4도 같은 기준으로 수정.
 
 ## 환경 변수 (myth → 자식 프로세스)
 
