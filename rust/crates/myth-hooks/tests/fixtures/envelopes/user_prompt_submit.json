@@ -1,0 +1,8 @@
+{
+    "session_id": "fe8f7050-3372-4000-b098-b657f030d918",
+    "transcript_path": "/home/miirr/.claude/projects/-tmp-myth-hook-probe/fe8f7050-3372-4000-b098-b657f030d918.jsonl",
+    "cwd": "/tmp/myth-hook-probe",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "Use Bash to run this failing command: cat /nonexistent_file_for_probe_v2. Do not try alternative commands. Just report that it failed."
+}

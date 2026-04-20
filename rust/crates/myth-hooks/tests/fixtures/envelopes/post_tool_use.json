@@ -1,0 +1,20 @@
+{
+    "session_id": "b8756e3e-e358-40ec-a856-defafcb55ab3",
+    "transcript_path": "/home/miirr/.claude/projects/-tmp-myth-hook-probe/b8756e3e-e358-40ec-a856-defafcb55ab3.jsonl",
+    "cwd": "/tmp/myth-hook-probe",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+        "command": "echo fixture-capture",
+        "description": "Print fixture-capture string"
+    },
+    "tool_response": {
+        "stdout": "fixture-capture",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+    },
+    "tool_use_id": "toolu_01MV8WShdk4uAEaRnU7D2hvb"
+}

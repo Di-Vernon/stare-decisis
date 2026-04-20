@@ -1,0 +1,9 @@
+{
+    "session_id": "fe8f7050-3372-4000-b098-b657f030d918",
+    "transcript_path": "/home/miirr/.claude/projects/-tmp-myth-hook-probe/fe8f7050-3372-4000-b098-b657f030d918.jsonl",
+    "cwd": "/tmp/myth-hook-probe",
+    "permission_mode": "bypassPermissions",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "last_assistant_message": "The command failed: `cat: /nonexistent_file_for_probe_v2: No such file or directory` (exit code 1)."
+}

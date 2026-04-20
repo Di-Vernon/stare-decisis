@@ -7,3 +7,21 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+myth-common = { path = "../myth-common" }
+myth-db = { path = "../myth-db" }
+myth-gavel = { path = "../myth-gavel" }
+myth-identity = { path = "../myth-identity" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+mimalloc = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+# [[bin]] targets are added in Task 3.2..3.5 as each hook binary is
+# implemented. Task 3.1 builds the shared `core` library only.

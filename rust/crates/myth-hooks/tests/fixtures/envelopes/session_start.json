@@ -1,0 +1,7 @@
+{
+    "session_id": "fe8f7050-3372-4000-b098-b657f030d918",
+    "transcript_path": "/home/miirr/.claude/projects/-tmp-myth-hook-probe/fe8f7050-3372-4000-b098-b657f030d918.jsonl",
+    "cwd": "/tmp/myth-hook-probe",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+}

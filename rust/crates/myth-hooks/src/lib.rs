@@ -1,14 +1,20 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! myth-hooks — Claude Code hook bridge (Layer 3).
+//!
+//! This crate's library surface is a set of shared helpers in `core`
+//! for parsing Claude Code's stdin JSON envelopes, producing the
+//! return JSON, recording per-invocation latency, and orchestrating
+//! the tiny fixed boilerplate every hook binary shares. The actual
+//! executables (myth-hook-pre-tool, etc.) land in
+//! `src/bin/*` from Task 3.2 onwards.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod core;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use core::input::{
+    parse_envelope, read_envelope_from_stdin, HookCommon, HookEnvelope, HookEventName,
+    HookPayload, PostToolUseData, PostToolUseFailureData, PostToolUseResponse,
+    PreToolUseData, SessionStartData, StopData, UserPromptSubmitData,
+};
+pub use core::latency::{record as record_latency, record_ignore_err as record_latency_quiet};
+pub use core::output::HookResult;
+pub use core::runner::run_hook;
+pub use core::session::parse_claude_session_id;
