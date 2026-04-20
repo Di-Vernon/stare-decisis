@@ -19,6 +19,8 @@ chrono = { workspace = true }
 mimalloc = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
+# Task 3.5 — Tier 0 deterministic classifier regex set
+regex = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -46,4 +48,7 @@ path = "src/bin/post_tool.rs"
 name = "myth-hook-pre-tool"
 path = "src/bin/pre_tool.rs"
 
-# [[bin]] target for post-tool-failure lands in Task 3.5.
+# Task 3.5 — post-tool-failure.
+[[bin]]
+name = "myth-hook-post-tool-failure"
+path = "src/bin/post_tool_failure.rs"

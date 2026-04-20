@@ -113,7 +113,11 @@ pub struct PostToolUseResponse {
 /// **PostToolUseFailure**: the runtime field is `error` (multiline
 /// string whose first line is typically `"Exit code N"`), **not** a
 /// structured `tool_response`. See docs 823e749 (hook schema probe).
-#[derive(Debug, Clone, Deserialize)]
+///
+/// Serialize derive added in Task 3.5 because the Variant B template
+/// embeds the payload as a compact JSON string in the
+/// `additionalContext` hook output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostToolUseFailureData {
     pub tool_name: String,
     pub tool_input: serde_json::Value,

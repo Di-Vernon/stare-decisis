@@ -8,6 +8,9 @@
 //! `src/bin/*` from Task 3.2 onwards.
 
 pub mod core;
+pub mod records;
+pub mod templates;
+pub mod tier0;
 
 pub use core::input::{
     parse_envelope, read_envelope_from_stdin, HookCommon, HookEnvelope, HookEventName,
@@ -18,3 +21,4 @@ pub use core::latency::{record as record_latency, record_ignore_err as record_la
 pub use core::output::HookResult;
 pub use core::runner::run_hook;
 pub use core::session::parse_claude_session_id;
+pub use tier0::{classify as classify_tier0, DeterministicClassification};

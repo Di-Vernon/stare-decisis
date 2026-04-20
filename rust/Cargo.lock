@@ -1314,6 +1314,7 @@ dependencies = [
  "myth-db",
  "myth-gavel",
  "myth-identity",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",
