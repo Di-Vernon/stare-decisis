@@ -71,48 +71,67 @@ crates/myth-gavel/
 pub struct Gavel {
     rules: RuleSet,
     grid: Grid,
-    lesson_store: Arc<dyn LessonStore>,
-    fatigue: Arc<Mutex<FatigueTracker>>,
+    // lesson_store: Box<dyn LessonStore>, // added in Task 2.3 (myth-identity integration)
+    fatigue: Mutex<FatigueTracker>,         // single-owner; Arc unnecessary (no cross-thread sharing in hook binary model)
 }
 
 impl Gavel {
     pub fn init() -> Result<Self> {
         let rules = RuleSet::load_all()?;
-        let grid = Grid::load()?;
         let db = Database::open(&myth_common::state_db_path())?;
-        let lesson_store = Arc::new(SqliteLessonStore::new(db));
-        let fatigue = Arc::new(Mutex::new(FatigueTracker::new()));
-        Ok(Self { rules, grid, lesson_store, fatigue })
+        let grid = Grid::load(&db)?;
+        // lesson_store: Task 2.3에서 `SqliteLessonStore` owned form을
+        // `Box<dyn LessonStore>`로 Gavel에 주입. 현재는 필드 미보유.
+        let fatigue = Mutex::new(FatigueTracker::new());
+        Ok(Self { rules, grid, fatigue })
     }
-    
+
     /// 단일 tool 호출에 대한 판정
     pub fn judge(&self, input: &ToolInput) -> Verdict {
         // 1. Bedrock Rule 검사 → 매칭 시 Seal
         if let Some(m) = self.rules.bedrock.match_any(&input.serialized) {
             return Verdict::seal(m);
         }
-        
+
         // 2. Foundation Rule 검사
         if let Some(m) = self.rules.foundation.match_any(&input.serialized) {
-            let lesson = self.lesson_store.find_by_identity(&m.identity_hash).ok().flatten();
-            let level = m.level;
-            let recurrence = lesson.as_ref()
-                .map(|l| Recurrence::from_count(l.recurrence_count))
-                .unwrap_or(Recurrence::I);
-            let enforcement = self.grid.lookup(level, recurrence);
-            return Verdict::new(enforcement, m);
+            // Recurrence::I fixed until Task 2.3 (lesson_store integration).
+            // 이후에는 `self.lesson_store.find_by_identity(hash)` 결과로
+            // `Recurrence::from_count(lesson.recurrence_count)` 산출.
+            let enforcement = self.grid.lookup(m.level, Recurrence::I);
+            let enforcement = self.fatigue.lock().unwrap()
+                .register(input.session_id, enforcement);
+            return Verdict::with_enforcement(enforcement, m, None);
         }
-        
-        // 3. Surface Rule 검사 (동일 패턴)
+
+        // 3. Surface Rule 검사 (동일 Grid 경로)
         if let Some(m) = self.rules.surface.match_any(&input.serialized) {
-            // ... Grid lookup
+            // ... Grid lookup + fatigue (Foundation과 동일 패턴)
         }
-        
+
         // 4. 어느 Rule도 매칭 안 됨
         Verdict::allow()
     }
 }
 ```
+
+> **v0.1 구현 중 변경** (Jeffrey 승인 2026-04-19)
+>
+> Task 2.1 구현에서 `Gavel` struct의 두 필드가 원안과 달라졌다:
+>
+> - `lesson_store: Arc<dyn LessonStore>` → **필드 자체 생략** (Task 2.3
+>   myth-identity 통합 시점에 `Box<dyn LessonStore>`로 추가). 원인:
+>   (a) `rusqlite::Connection`이 `!Sync`이므로 `Arc<dyn LessonStore + Sync>`
+>   불가능하고, (b) Gavel은 hook 바이너리 내 **단일 소유자**이므로
+>   cross-thread 공유가 필요 없다 — `Arc` 대신 `Box`가 충분.
+>   Day-1 `grid_path()`는 lesson 조회 없이 Recurrence::I 고정으로 동작.
+>
+> - `fatigue: Arc<Mutex<FatigueTracker>>` → **`fatigue: Mutex<FatigueTracker>`**
+>   로 단순화. Gavel이 단일 소유자라 Arc로 공유할 필요 없음.
+>
+> 이 두 결정의 **최종 확정은 Task 2.3**에서 myth-identity를 통합할 때
+> 이뤄진다. myth-identity 쪽의 LessonStore 사용 패턴(cross-thread 필요
+> 여부 등)에 맞춰 Box 유지 또는 Arc 복원을 선택한다.
 
 ## `RuleSet` — 정규식 컴파일
 
