@@ -41,4 +41,9 @@ path = "src/bin/stop.rs"
 name = "myth-hook-post-tool"
 path = "src/bin/post_tool.rs"
 
-# [[bin]] targets for pre-tool / post-tool-failure land in Tasks 3.4..3.5.
+# Task 3.4 — pre-tool (The Gavel).
+[[bin]]
+name = "myth-hook-pre-tool"
+path = "src/bin/pre_tool.rs"
+
+# [[bin]] target for post-tool-failure lands in Task 3.5.
