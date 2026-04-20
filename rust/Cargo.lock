@@ -1306,6 +1306,20 @@ dependencies = [
 [[package]]
 name = "myth-hooks"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "mimalloc",
+ "myth-common",
+ "myth-db",
+ "myth-gavel",
+ "myth-identity",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "myth-identity"
