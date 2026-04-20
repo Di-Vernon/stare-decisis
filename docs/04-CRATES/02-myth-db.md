@@ -169,8 +169,8 @@ pub trait LessonStore {
     fn mark_status(&self, id: LessonId, status: LessonStatus) -> Result<()>;
 }
 
-pub struct SqliteLessonStore<'a> { /* db: &'a Database */ }
-impl LessonStore for SqliteLessonStore<'_> { ... }
+pub struct SqliteLessonStore { /* inner: Database */ }
+impl LessonStore for SqliteLessonStore { ... }
 ```
 
 Day-1에서 `myth-gavel`, `myth-identity` 등은 **같은 프로세스 내 단일 스레드**에서 store를
