@@ -385,6 +385,37 @@ MYTH_NO_EMBED_DAEMON=1          # embed daemon 비활성 (fallback only)
 CLAUDE_REVIEW_ACTIVE=1          # myth 자체가 발동한 Claude 호출 (재귀 방지)
 ```
 
+## 스키마 드리프트 감지
+
+Hook envelope 스키마는 `crates/myth-hooks/tests/fixtures/envelopes/`의
+6개 JSON 파일로 **계약화**된다 (Task 3.1에서 /tmp/myth-hook-probe/
+실측분을 repo로 이동, wave-3.1 커밋). `input_test`가 이 fixture들을
+`parse_envelope`로 역직렬화하며, 필드 불일치는 곧 테스트 실패다.
+
+Claude Code는 **런타임 계약**이므로 상위 버전 업데이트 시 envelope
+변경 가능성이 있다. 다음 이벤트마다 drift 재점검을 수행한다:
+
+- Claude Code minor 업데이트 (예: 2.1.x → 2.2.x)
+- 분기별 정기 점검 (Milestone A 이후 cron 또는 수동)
+- `input_test` 실패가 실제 production에서 감지될 때
+
+**재실측 절차** (30분 이내):
+
+1. `/tmp/myth-hook-probe/`의 dump script 재설정 (823e749 커밋 본문 참조).
+2. `claude --permission-mode bypassPermissions -p "..."`로 envelope 수집.
+3. `captured/*.log`에서 stdin JSON 추출 → `tests/fixtures/envelopes/*.json`
+   덮어쓰기.
+4. `cargo test -p myth-hooks --test input_test`로 재검증.
+5. 차이 발견 시: (a) `PostToolUseFailureData` 등 struct 수정,
+   (b) `docs/06-HOOKS.md` 본 섹션 업데이트, (c) `docs-1` 스타일의
+   `docs(hooks): align hook JSON schema with Claude Code X.Y.Z` 커밋,
+   (d) 영향받는 bin 재검증.
+
+`input_test`의 unknown event 테스트와 malformed envelope 테스트가
+스키마 드리프트의 첫 신호 역할을 한다. deny_unknown_fields 대신
+이 경로를 택한 이유(05-myth-hooks.md input.rs 주석 참조)는 **파싱
+관용 + 테스트 기반 감지**가 Day-1 운영 현실에 맞기 때문.
+
 ## Hook 바이너리 공통 규약
 
 1. **stdin에서 JSON 읽기**. EOF 즉시.

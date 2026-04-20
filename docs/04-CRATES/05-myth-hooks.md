@@ -194,11 +194,16 @@ fn run() -> HookResult {
     let template = templates::variant_b::render(&input, reminder_id);
     
     // lesson-state.jsonl에 pending_reflection append
+    //
+    // Per H2 실측 (Claude Code 2.1.114의 UserPromptSubmit에 turn_number
+    // 없음), 원안의 `turn_n`은 `tool_use_id`로 대체. Task 3.5에서 확정
+    // (wave-3.5 commit): user-prompt hook이 compliance 검증할 때 이
+    // tool_use_id를 transcript의 tool_use_id와 교차 매칭한다.
     let pending = PendingReflection {
         reminder_id,
         session_id: input.session_id,
-        turn_n: input.turn_number,
         tool_name: input.tool_name.clone(),
+        tool_use_id: input.tool_use_id.clone(),
         status: "pending_reflection".into(),
         ts: now(),
     };
