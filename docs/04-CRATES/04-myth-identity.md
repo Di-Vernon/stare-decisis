@@ -167,88 +167,71 @@ pub trait VectorStore: Send + Sync {
 
 ```rust
 pub struct InMemoryStore {
-    // vectors.bin을 mmap으로 매핑
-    mmap: Arc<RwLock<Mmap>>,
-    // lesson_id ↔ row index 매핑은 SQLite의 별도 테이블
-    index: Arc<RwLock<HashMap<LessonId, usize>>>,
-    // generation 번호 (SQLite의 vectors_generation과 대조)
-    generation: Arc<RwLock<u64>>,
+    path: PathBuf,
+    inner: RwLock<Inner>,
+}
+
+struct Inner {
+    // vectors.bin의 내용을 소유 Vec로 보관. 75MB (50K × 384 × 4 bytes)
+    // 수준이라 in-process 메모리로 충분하다.
+    vectors: Vec<[f32; 384]>,
+    // lesson_id ↔ row index 매핑. 재시작 시 vector_metadata SQLite
+    // 테이블에서 load_index()로 주입.
+    id_to_row: HashMap<LessonId, usize>,
+    // generation 번호 (SQLite의 vector_generation과 대조)
+    generation: u64,
 }
 
 impl InMemoryStore {
-    pub fn open() -> Result<Self> {
-        let path = myth_common::vectors_bin_path();
-        let file = File::open(&path)?;
-        let mmap = unsafe { Mmap::map(&file)? };
-        
-        // SQLite의 vector_metadata 테이블에서 index + generation 로드
-        let (index, generation) = load_metadata()?;
-        
-        Ok(Self {
-            mmap: Arc::new(RwLock::new(mmap)),
-            index: Arc::new(RwLock::new(index)),
-            generation: Arc::new(RwLock::new(generation)),
-        })
-    }
+    /// Fresh store. Writes an empty vectors.bin so subsequent open()
+    /// calls can read it back.
+    pub fn create(path: impl Into<PathBuf>) -> Result<Self> { ... }
+
+    /// Open an existing vectors.bin. id_to_row starts empty; callers
+    /// hydrate it via load_index() from the vector_metadata table.
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self> { ... }
+
+    pub fn load_index(&self, map: HashMap<LessonId, usize>) -> Result<()> { ... }
 }
 
 impl VectorStore for InMemoryStore {
-    fn knn(&self, query: &[f32; 384], k: usize) -> Result<Vec<(LessonId, f32)>> {
-        let mmap = self.mmap.read().unwrap();
-        let vectors = mmap_to_vectors(&mmap);  // &[[f32; 384]]
-        let index = self.index.read().unwrap();
-        
-        // SIMD cosine distance (정규화된 벡터 → 내적)
-        let mut results: Vec<(LessonId, f32)> = vectors.iter().enumerate()
-            .map(|(row_idx, v)| {
-                let id = lookup_id_by_row(&index, row_idx);
-                let distance = simsimd::cosine_distance_f32(query, v);
-                (id, distance)
-            })
-            .collect();
-        
-        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        results.truncate(k);
-        Ok(results)
-    }
-    
     fn upsert(&self, id: LessonId, vec: &[f32; 384]) -> Result<()> {
-        // 1. 새 vectors.bin 작성 (기존 + 신규)
-        // 2. atomic rename
-        // 3. SQLite 트랜잭션: vector_metadata 업데이트, generation 증가
-        // 4. mmap 재로드
-        
-        let mut index = self.index.write().unwrap();
-        let mut generation = self.generation.write().unwrap();
-        
-        let new_gen = *generation + 1;
-        let new_path = myth_common::vectors_bin_path().with_extension("bin.new");
-        
-        // 전체 재작성
-        let mut new_vectors: Vec<[f32; 384]> = current_vectors(&self.mmap.read().unwrap())?.to_vec();
-        if let Some(&existing_row) = index.get(&id) {
-            new_vectors[existing_row] = *vec;
-        } else {
-            index.insert(id, new_vectors.len());
-            new_vectors.push(*vec);
-        }
-        
-        write_vectors_file(&new_path, new_gen, &new_vectors)?;
-        std::fs::rename(&new_path, myth_common::vectors_bin_path())?;
-        
-        update_metadata(&index, new_gen)?;
-        *generation = new_gen;
-        
-        // mmap 재로드
-        drop(self.mmap.read().unwrap());  // 기존 lock 해제
-        let file = File::open(myth_common::vectors_bin_path())?;
-        let new_mmap = unsafe { Mmap::map(&file)? };
-        *self.mmap.write().unwrap() = new_mmap;
-        
-        Ok(())
+        // 1. RwLock write — 직렬화된 쓰기
+        // 2. vectors Vec에 업서트 (id_to_row 갱신)
+        // 3. generation++
+        // 4. 전체 vectors를 tmp 파일에 쓰고 atomic rename
+    }
+
+    fn knn(&self, query: &[f32; 384], k: usize) -> Result<Vec<(LessonId, f32)>> {
+        // RwLock read — vectors 전체에 linear scan + cosine distance
+        // 후 k개로 truncate. 50K × 384 SIMD-less scan 약 50~80ms 예상.
     }
 }
 ```
+
+> **v0.1 Task 2.3 단계 4 중간 게이트에서 결정 — mmap → Vec** (Jeffrey 승인 2026-04-21)
+>
+> 초안은 `Arc<RwLock<Mmap>>`로 vectors.bin을 실시간 mmap하는 구조였다.
+> 구현 중 검토 결과 mmap의 주 이득(zero-copy read + 프로세스간 공유)이
+> myth Day-1 구조에서 실현되지 않음을 확인했다:
+>
+> - `myth-embed` daemon은 별도 프로세스. 이쪽 벡터는 IPC로 전달되지
+>   mmap 공유가 필요 없다.
+> - `myth-identity`의 `InMemoryStore`는 **hook 바이너리 내부** 단일
+>   프로세스 사용. 공유 필요 없음.
+> - 50K × 384 × 4 = **75MB** 수준으로 in-memory Vec 자체 부담 낮음.
+> - mmap + atomic rename 후 재 mmap 재로드 로직의 복잡도가
+>   Day-1 크기 대비 과투자.
+>
+> 따라서 Day-1은 `Vec<[f32; 384]>` + atomic rename (tmp 파일 작성 →
+> `fsync` → `rename`)으로 구현. `VectorStore` trait 인터페이스는
+> 원안 그대로 보존되므로 소비자(tier2 등) 코드 영향 없음.
+>
+> **Milestone B (20K lessons AND in-memory knn P99 > 50ms 동시 충족)**
+> 도달 시, mmap으로의 증분 개선을 거치지 않고 **sqlite-vec 또는
+> usearch 구현체로 직접 전환**한다 (`store/sqlite_vec.rs`,
+> `store/usearch.rs` 스텁이 그 자리). 이 경로가 `trait VectorStore`
+> 추상화의 원래 의도와 정합.
 
 **vectors.bin 파일 포맷**:
 
