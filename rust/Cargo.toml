@@ -49,6 +49,14 @@ syntect = "5"
 pulldown-cmark = "0.10"
 clap = { version = "4", features = ["derive"] }
 
+# Filesystem / XDG
+dirs = "5"
+libc = "0.2"
+fs2 = "0.4"
+
+# Dev-only
+tempfile = "3"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

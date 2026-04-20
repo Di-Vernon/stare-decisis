@@ -1,14 +1,16 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! myth-db — Layer 1 persistent storage.
+//!
+//! SQLite for queryable metadata (state.db), JSONL for append-only event
+//! logs, and a tamper-evident Merkle audit chain (blake3).
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod appeal;
+pub mod audit;
+pub mod events;
+pub mod jsonl;
+pub mod lesson;
+pub mod sqlite;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use audit::{AuditEntry, AuditEvent, AuditLog};
+pub use jsonl::JsonlWriter;
+pub use lesson::{Lesson, LessonStatus, LessonStore, SqliteLessonStore};
+pub use sqlite::Database;
