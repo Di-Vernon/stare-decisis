@@ -158,7 +158,7 @@ impl Database {
 `myth-db`는 **trait을 export**하고, 다른 crate가 구현체를 받아 쓴다:
 
 ```rust
-pub trait LessonStore: Send + Sync {
+pub trait LessonStore {
     fn insert(&self, lesson: &Lesson) -> Result<LessonId>;
     fn get(&self, id: LessonId) -> Result<Option<Lesson>>;
     fn find_by_identity(&self, hash: &[u8; 20]) -> Result<Option<Lesson>>;
@@ -169,11 +169,26 @@ pub trait LessonStore: Send + Sync {
     fn mark_status(&self, id: LessonId, status: LessonStatus) -> Result<()>;
 }
 
-pub struct SqliteLessonStore { /* inner: Database */ }
-impl LessonStore for SqliteLessonStore { ... }
+pub struct SqliteLessonStore<'a> { /* db: &'a Database */ }
+impl LessonStore for SqliteLessonStore<'_> { ... }
 ```
 
-`myth-gavel`, `myth-identity` 등은 `Arc<dyn LessonStore>` 받음.
+Day-1에서 `myth-gavel`, `myth-identity` 등은 **같은 프로세스 내 단일 스레드**에서 store를
+소비한다 (binary-per-hook 모델). `Box<dyn LessonStore>` 또는 단순 참조로 전달.
+
+> **v0.1 구현 중 변경** (Jeffrey 승인 2026-04-19)
+>
+> 초안의 `LessonStore: Send + Sync` bound를 **제거**했다. 근거:
+> `rusqlite::Connection`은 내부 `StatementCache`가 `RefCell<LruCache<…>>`를
+> 사용하므로 `!Sync`이고, `SqliteLessonStore<'a> { db: &'a Database }`
+> 구조에서는 `&Database`가 `Send`이려면 `Database: Sync`가 요구되는데
+> 이 역시 동일 제약으로 불가능하다. myth Day-1은 `binary-per-hook` 단일
+> 프로세스·단일 스레드 모델이라 cross-thread 공유가 실제로 필요 없다.
+>
+> Milestone C(The Gavel daemon 전환)가 발동해 공유 프로세스 상태가
+> 등장하면, 그 시점에 `Mutex<Connection>` 래퍼 레이어를 추가하고 필요한
+> bound(`Send`, 필요 시 `Sync`)를 복원한다. Article 19 (Day-1 Bounded
+> Responsibility)에 따라 지금은 최소 bound 유지.
 
 ## JSONL writer
 
