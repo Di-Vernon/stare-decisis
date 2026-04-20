@@ -129,17 +129,20 @@ Research #1에 따라 전수 목록:
 
 ## Hook 입력 JSON 스키마 (stdin)
 
-Claude Code가 모든 hook에 보내는 공통 필드:
+Claude Code 2.1.114가 모든 hook에 보내는 공통 필드:
 
 ```json
 {
   "session_id": "uuid-v4-string",
-  "transcript_path": "/path/to/transcript.jsonl",
+  "transcript_path": "/home/<user>/.claude/projects/<escaped-cwd>/<session>.jsonl",
   "cwd": "/path/to/project",
   "hook_event_name": "PreToolUse",
-  "stop_hook_active": false
+  "stop_hook_active": false,
+  "permission_mode": "default" | "acceptEdits" | "bypassPermissions" | "plan" | "..."
 }
 ```
+
+`permission_mode`는 현재 세션의 권한 모드. `Stop` 외 대부분 이벤트에 포함.
 
 이벤트별 추가 필드:
 
@@ -156,32 +159,50 @@ Claude Code가 모든 hook에 보내는 공통 필드:
 }
 ```
 
-### `PostToolUse` / `PostToolUseFailure` 추가
+### `PostToolUse` 추가 (성공 케이스)
 
 ```json
 {
   "tool_name": "Bash",
   "tool_use_id": "toolu_abc123",
-  "tool_input": { /* 동일 */ },
+  "tool_input": { /* PreToolUse와 동일 */ },
   "tool_response": {
-    "stdout": "...",
-    "stderr": "...",
-    "exit_code": 0,
-    "duration_ms": 234
+    "stdout": "hello world",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false
   }
 }
 ```
 
-`PostToolUseFailure`는 `exit_code != 0` 또는 비정상 종료 시만 발동 (2.1.27+).
+`tool_response`에 `exit_code` / `duration_ms`는 **없다**. 성공 판정은 "이 이벤트 자체가 발동했다"로 간주 — 실패는 배타적으로 `PostToolUseFailure`가 대신 발동.
+
+### `PostToolUseFailure` 추가 (실패 케이스, 2.1.27+)
+
+```json
+{
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_01Nv3...",
+  "tool_input": { /* PreToolUse와 동일 */ },
+  "error": "Exit code 1\ncat: /nonexistent_file: No such file or directory",
+  "is_interrupt": false
+}
+```
+
+**주의**: `tool_response` 객체가 아니라 단일 문자열 `error`. 첫 줄에 보통 `"Exit code N"`이 온다 (Bash 기준). 파서는 multiline string으로 취급해야 하고, exit code가 필요하면 이 문자열의 첫 줄을 파싱해야 한다.
+
+`is_interrupt`는 사용자가 도중에 중단했는지 여부(취소).
 
 ### `UserPromptSubmit` 추가
 
 ```json
 {
-  "prompt": "사용자가 방금 입력한 텍스트",
-  "turn_number": 5
+  "prompt": "사용자가 방금 입력한 텍스트"
 }
 ```
+
+`turn_number`는 **없다**. Turn 추적이 필요한 hook은 자체적으로 카운터를 유지하거나 transcript 파일의 라인 수로 추정해야 한다.
 
 ### `SessionStart` 추가
 
@@ -195,9 +216,39 @@ Claude Code가 모든 hook에 보내는 공통 필드:
 
 ```json
 {
-  "stop_reason": "end_turn" | "max_tokens" | "..."
+  "stop_hook_active": false,
+  "last_assistant_message": "응답 텍스트의 마지막 메시지"
 }
 ```
+
+**주의**: 초안 문서는 `stop_reason: "end_turn" | "max_tokens"`를 제시했으나 실제 2.1.114 runtime은 `last_assistant_message` (마지막 assistant 응답의 본문 문자열)를 보낸다. 의미와 용도가 다르다. "왜 멈췄는지"를 알려주지 않고 "무엇을 말하고 멈췄는지"를 알려준다.
+
+### 이벤트 간 관계 (실측 기반)
+
+- **`PreToolUse`는 모든 tool 호출에서 발동** (성공·실패 무관).
+- **`PostToolUse`와 `PostToolUseFailure`는 배타적** — 같은 `tool_use_id`에 대해 둘 중 하나만 발동한다. 성공 → `PostToolUse`, 실패 → `PostToolUseFailure`.
+- **`PreToolUse`가 `continue: false` + exit 2로 block했을 때의 후속 이벤트 발동 여부는 미실측**. Task 3.4(pre-tool) 구현 중 실제 Strike/Seal 경로를 확인하며 추가 검증 예정.
+
+> **v0.1 Task 3 사전 실측 기반 업데이트** (Jeffrey 승인 2026-04-21, Claude Code 2.1.114)
+>
+> 이 섹션은 2026-04-21 `/tmp/myth-hook-probe/`에서 Claude Code 2.1.114
+> 런타임에 빈 dump 스크립트를 bind해 stdin JSON을 **직접 캡처**한
+> 결과로 작성되었다. 초안(설계 당시의 Research #1)과 실제 런타임
+> 사이에 다섯 가지 유의미한 차이가 있었다:
+>
+> 1. **공통 필드에 `permission_mode` 추가** — 세션 권한 모드가 모든 이벤트 stdin에 포함.
+> 2. **`UserPromptSubmit`에 `turn_number` 없음** — `prompt` 단독.
+> 3. **`Stop`의 `stop_reason` 대신 `last_assistant_message`** — 필드명·의미 모두 다름.
+> 4. **`PostToolUse`의 `tool_response` 필드 교체** — `{stdout, stderr, interrupted, isImage, noOutputExpected}`. `exit_code` / `duration_ms` 없음.
+> 5. **`PostToolUseFailure` 스키마 전면 교체** — `tool_response` 객체가 아니라 `error` (multiline string) + `is_interrupt` (bool). 이 차이가 myth 학습 루프의 핵심이므로 가장 중대.
+>
+> 관계 관찰(추가):
+> - `PostToolUse`와 `PostToolUseFailure`는 배타.
+> - `PreToolUse`는 성공·실패 양쪽 경로에서 발동.
+> - Block(exit 2) 이후 흐름은 이번 실측 범위 밖. Task 3.4에서 검증.
+>
+> myth-hooks의 `core/input.rs`는 이 스키마를 primary 소스로 파싱하도록
+> 구현한다. 환경변수는 docs(architecture): hook env contract를 참고.
 
 ## Hook 출력 JSON 스키마 (stdout)
 
