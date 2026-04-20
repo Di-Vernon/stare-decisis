@@ -227,7 +227,13 @@ Claude Code 2.1.114가 모든 hook에 보내는 공통 필드:
 
 - **`PreToolUse`는 모든 tool 호출에서 발동** (성공·실패 무관).
 - **`PostToolUse`와 `PostToolUseFailure`는 배타적** — 같은 `tool_use_id`에 대해 둘 중 하나만 발동한다. 성공 → `PostToolUse`, 실패 → `PostToolUseFailure`.
-- **`PreToolUse`가 `continue: false` + exit 2로 block했을 때의 후속 이벤트 발동 여부는 미실측**. Task 3.4(pre-tool) 구현 중 실제 Strike/Seal 경로를 확인하며 추가 검증 예정.
+- **`PreToolUse`가 `continue: false` + exit 2로 block했을 때 후속 이벤트 억제됨** — Task 3.4 실측 확인 (2026-04-21).
+  임시 Bedrock Rule("DANGEROUSBLOCKTEST" → level 5)을 `~/.myth/bedrock-rules.yaml`에 등록하고
+  `myth-hook-pre-tool` 바이너리를 `.claude/settings.json`의 PreToolUse에 바인딩 후 matching command
+  실행. Claude Code 응답: "The command was blocked by a PreToolUse hook (`myth-hook-pre-tool`)".
+  동시에 PostToolUse·PostToolUseFailure 둘 다 dump hook으로 등록했으나 captured 디렉토리 자체가
+  생성되지 않음 → Claude Code가 block 판정 후 tool 실행·후속 이벤트를 **전부 건너뜀**. 즉
+  `Strike`/`Seal`은 **lesson 학습 루프 진입 경로조차 차단**하는 터미널 판정이다.
 
 > **v0.1 Task 3 사전 실측 기반 업데이트** (Jeffrey 승인 2026-04-21, Claude Code 2.1.114)
 >
