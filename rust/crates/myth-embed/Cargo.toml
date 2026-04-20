@@ -7,3 +7,24 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+myth-common = { path = "../myth-common" }
+
+serde = { workspace = true }
+bincode = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+mimalloc = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+
+# Embedding (ort arrives transitively via fastembed — see
+# docs/04-CRATES/06-myth-embed.md change box 2026-04-19)
+fastembed = { workspace = true }
+
+# Unix (setsid, flock)
+nix = { workspace = true }
+
+[[bin]]
+name = "myth-embed"
+path = "src/main.rs"
