@@ -193,28 +193,26 @@ pub fn format_iso(ts: &Timestamp) -> String { /* 2026-04-19T14:23:45Z */ }
 pub enum MythError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON serialization error: {0}")]
     Json(#[from] serde_json::Error),
-    
-    #[error("YAML parse error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
-    
-    #[error("SQLite error: {0}")]
-    Sqlite(#[from] rusqlite::Error),
-    
+
     #[error("config not found at {path}")]
     ConfigMissing { path: String },
-    
+
     #[error("rule file parse error in {file}: {message}")]
     RuleParse { file: String, message: String },
-    
+
     #[error("hook timeout after {ms}ms")]
     HookTimeout { ms: u64 },
-    
+
     #[error("daemon unavailable: {reason}")]
     DaemonUnavailable { reason: String },
-    
+
+    // rusqlite::Error, serde_yaml::Error 등 타 crate 의존 에러는
+    // 각 호출자(myth-db, myth-gavel 등)에서 anyhow::Context 경유하여
+    // 이 variant로 수렴된다. myth-common은 레이어 경계를 보존하기 위해
+    // 해당 crate를 직접 의존하지 않는다.
     #[error("{0}")]
     Other(#[from] anyhow::Error),
 }
@@ -223,6 +221,18 @@ pub type Result<T> = std::result::Result<T, MythError>;
 ```
 
 `anyhow::Error`를 감싸서 `?` 연산자 편의성 유지.
+
+> **v0.1 구현 중 변경** (Jeffrey 승인 2026-04-19)
+>
+> 이전 초안은 `#[from] rusqlite::Error`와 `#[from] serde_yaml::Error` variant를
+> 직접 포함했으나, 이는 `myth-common`이 rusqlite·serde_yaml을 의존하게 만들어
+> Layer 0의 가벼움을 훼손했다. 특히 `myth-embed`(fastembed daemon)까지 SQLite C
+> 소스 전체를 링크하는 구조가 되어 `04-CRATES/00-overview.md §3`의 "myth-embed는
+> 독립적" 원칙과 충돌.
+>
+> 해결: DB·YAML 관련 에러는 호출 crate(myth-db, myth-gavel 등)에서
+> `anyhow::Context`로 감싸 `Other` variant로 수렴. 필요 시 각 crate가 자기
+> typed wrapper(DbError, GavelError)를 로컬로 정의한다.
 
 ## XDG 경로
 
