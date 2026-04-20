@@ -296,8 +296,10 @@ async fn query_daemon(req: Request) -> Response {
     
     match spawn::spawn_daemon().await {
         Ok(()) => {
-            // 최대 2초 대기하며 재시도
-            for _ in 0..20 {
+            // 최대 30초 대기하며 재시도 (cold boot: 모델 다운로드 + ONNX
+            // 로드에 실측 ~18.5초 걸렸음. hot path는 try_connect가
+            // 첫 시도에 성공하므로 이 retry loop에 들어가지 않음.)
+            for _ in 0..300 {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 if let Ok(resp) = try_connect(&socket_path, &req).await {
                     return resp;
