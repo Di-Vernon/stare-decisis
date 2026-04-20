@@ -252,7 +252,7 @@ simsimd = "4"
 
 # 임베딩
 fastembed = "5"
-ort = "2.0-rc"
+# ort: transitive via fastembed (no direct workspace entry — see 06-myth-embed.md change box)
 
 # TUI
 ratatui = "0.26"

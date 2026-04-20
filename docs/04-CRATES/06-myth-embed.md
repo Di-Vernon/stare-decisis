@@ -36,7 +36,8 @@ anyhow = { workspace = true }
 
 # 임베딩
 fastembed = { workspace = true }
-ort = { workspace = true }
+# ort: not a direct dependency — fastembed brings it in transitively.
+# See the "v0.1 Task 2.2 사전 API 확인" change box below.
 
 # Unix socket
 nix = { version = "0.28", features = ["fs"] }
@@ -45,6 +46,27 @@ nix = { version = "0.28", features = ["fs"] }
 name = "myth-embed"
 path = "src/main.rs"
 ```
+
+> **v0.1 Task 2.2 사전 API 확인 중 발견** (Jeffrey 승인 2026-04-19)
+>
+> 초안은 `ort = "2.0-rc"`를 workspace 및 crate 의존성으로 명시했으나,
+> Task 2.2 사전 조사에서 세 가지가 확인되었다:
+>
+> 1. **공개 API 사용 경로 0개** — 이 문서 전체에서 `ort::`, `use ort`,
+>    `Session`, `Environment`, `ExecutionProvider` 직접 사용이 없다.
+>    모든 임베딩 로직은 `fastembed::TextEmbedding` 레벨에서 종결.
+> 2. **`"2.0-rc"`는 cargo semver syntax 오류** — `expected comma after
+>    minor version number, found '-'`. 즉 resolve 이전 parse 단계에서
+>    실패한다 (Wave 2.2 첫 줄에서 터졌을 문제; 이전까지 `ort`를 실제로
+>    사용한 crate가 없어 cargo lazy-parse로 숨어 있었음).
+> 3. **fastembed 5.13.2가 전이 의존으로 호환 `ort`를 자동 선택** — 우리가
+>    workspace에서 직접 pin할 이유 없음.
+>
+> 결론: workspace·crate 양쪽에서 `ort` 직접 의존을 제거하고 fastembed가
+> 가져오는 버전에 맡긴다. pre-release semver 지옥을 Day-1 단계에서 영구
+> 제거. `ort` 공개 API를 직접 써야 할 경로가 미래에 등장하면 (예: custom
+> ExecutionProvider) 그 시점에 exact-match 버전(`=2.0.0-rc.NN`)으로
+> 다시 도입한다.
 
 ## 모듈 구조
 

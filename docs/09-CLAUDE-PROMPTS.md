@@ -126,7 +126,7 @@ mimalloc = { version = "0.1", default-features = false }
 memmap2 = "0.9"
 simsimd = "4"
 fastembed = "5"
-ort = "2.0-rc"
+# ort: transitive via fastembed (removed from workspace per 2026-04-19 review — see docs/04-CRATES/06-myth-embed.md change box)
 ratatui = "0.26"
 crossterm = "0.27"
 syntect = "5"
