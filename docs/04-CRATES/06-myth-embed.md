@@ -112,6 +112,32 @@ path = "src/main.rs"
 > 모두 활성화하므로 중간 단계 `ort-download-binaries` 추가는 불필요하고
 > 해롭다. 위 3-feature 조합은 이 함정을 회피한 결과다.
 
+> **v0.1 Task 2.2 사전 API 확인 — fastembed InitOptions builder 패턴** (Jeffrey 승인 2026-04-19)
+>
+> 초안의 `daemon/model.rs` 예시는 struct literal 형태였으나,
+> fastembed 5.13.2의 실제 API는 builder 패턴이다:
+>
+> ```rust
+> // 초안 (컴파일 안 됨):
+> InitOptions {
+>     model_name: EmbeddingModel::MultilingualE5Small,
+>     cache_dir: ...,
+>     ..Default::default()
+> }
+>
+> // 실제 API:
+> InitOptions::new(EmbeddingModel::MultilingualE5Small)
+>     .with_cache_dir(...)
+>     .with_show_download_progress(true)
+> ```
+>
+> 또한 `InitOptions`는 `TextInitOptions`의 type alias로,
+> fastembed가 text/image 임베딩 백엔드를 분리한 결과다. import 경로
+> (`use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};`)는 그대로
+> 유효하므로 호출 측 코드 외에 별도 조정은 없다.
+>
+> 아래 `daemon/model.rs` 코드 예시는 실제 API에 맞게 갱신된 상태다.
+
 ## 모듈 구조
 
 ```
@@ -448,15 +474,19 @@ pub struct Model {
 
 impl Model {
     pub async fn load() -> Result<Arc<Self>> {
-        // blocking task로 로드 (fastembed-rs는 sync)
+        // blocking task로 로드 (fastembed-rs는 sync).
+        // NOTE: fastembed 5.13.2에서 `InitOptions`는 `TextInitOptions`의
+        //       type alias이며 **builder 패턴**을 사용한다. 초안의
+        //       `InitOptions { model_name, cache_dir, ..Default::default() }`
+        //       struct literal 형태는 컴파일되지 않는다.
         let model = tokio::task::spawn_blocking(|| {
-            TextEmbedding::try_new(InitOptions {
-                model_name: EmbeddingModel::MultilingualE5Small,
-                cache_dir: myth_common::myth_home().join("embeddings/models"),
-                ..Default::default()
-            })
+            TextEmbedding::try_new(
+                InitOptions::new(EmbeddingModel::MultilingualE5Small)
+                    .with_cache_dir(myth_common::myth_home().join("embeddings/models"))
+                    .with_show_download_progress(true),
+            )
         }).await??;
-        
+
         Ok(Arc::new(Self { inner: Arc::new(model) }))
     }
     
