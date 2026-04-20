@@ -48,10 +48,10 @@ Layer 0 (기반):   myth-common
 
 - `myth-common`: 모든 crate가 의존. 타입·에러·유틸.
 - `myth-db`: 하위 2개 layer. state.db 추상.
-- `myth-identity`: `myth-db` + `myth-common`. 임베딩 호출은 `myth-embed` 프로토콜을 통해 (직접 의존 아님).
+- `myth-identity`: `myth-db` + `myth-common` + `myth-embed` (protocol types만). 실제 임베딩 호출은 런타임에 Unix socket IPC 경유.
 - `myth-gavel`: `myth-db` + `myth-common`. 정규식 컴파일 + Grid lookup.
 - `myth-hooks`: 위 모두 조합. hook 바이너리 6개 = 6 bin target.
-- `myth-embed`: 독립적. `myth-common`만 의존. IPC 프로토콜로 다른 crate와 통신.
+- `myth-embed`: **실행 시 독립 프로세스** (self-daemonizing). `myth-common`만 런타임 의존. 다른 crate가 Cargo-level에서 `myth-embed`의 `protocol::types` 모듈을 import하는 것은 허용 — bincode wire protocol v1이 PROTOCOL.md로 영구 고정이므로 type 정의 공유는 안전. 실제 데이터는 전부 Unix socket으로 흐름.
 - `myth-orchestrator`: 기존 `harness-orchestrator/lib/` 포팅 + Rust 래핑.
 - `myth-runtime`: Claude Code subprocess 관리.
 - `myth-ui`: ratatui + syntect. `myth-runtime` 관찰.
@@ -140,7 +140,17 @@ bin targets:
 - 투명성 명령: status, stop, probe
 - 15분 유휴 자가 종료
 
-**다른 crate와 약한 결합**. `myth-common`만 직접 의존. 다른 crate는 IPC로만 소통 (의존성 없음).
+**다른 crate와 약한 결합**. `myth-common`만 런타임 의존. 다른 crate는 실제 데이터를 IPC(Unix socket)로만 교환하지만, `protocol::types` 모듈을 Cargo 의존으로 import할 수 있다 — wire protocol v1이 PROTOCOL.md로 영구 고정이라 type 공유가 안전. 예: `myth-identity`의 tier-2 matcher가 `Request`/`Response`를 참조.
+
+> **v0.1 Task 2.3 시작 — "독립적"의 범위 명확화** (Jeffrey 승인 2026-04-21)
+>
+> 초안은 "myth-embed는 독립적. myth-common만 직접 의존. 다른 crate는 IPC로만 소통 (의존성 없음)"이라고 표현했다. 실제 구현에서 `myth-identity`의 tier-2 matcher가 `myth-embed`의 `Request`/`Response`/`Op`/`OpResult` 타입을 공유해야 함이 확인되면서 (양쪽에 중복 정의하는 대안은 유지보수 악화), 이 문구를 다음과 같이 재해석한다:
+>
+> - **실행 독립성**: `myth-embed` daemon은 **별도 OS 프로세스**로 실행되며, 다른 crate의 프로세스 수명주기·메모리·panic과 완전히 분리된다. 이 속성은 여전히 엄격히 유지.
+> - **Cargo 의존 허용**: 다른 crate가 `myth-embed`의 `protocol::types` 모듈을 `[dependencies]`로 import하는 것은 허용. 단 **실제 임베딩 호출**은 반드시 Unix socket 경유.
+> - **안전성 근거**: wire protocol v1이 `PROTOCOL.md`로 **영구 고정**이므로 type 정의가 미래에 변하지 않는다. v2가 도입되면 별도 소켓 경로 + 별도 type 모듈로 병존시킨다.
+>
+> 이 해석 하에서도 `myth-embed`의 **역 의존성 0**은 유지 — `myth-embed`는 `myth-common` 외 다른 myth crate를 절대 의존하지 않는다.
 
 **상세**: `04-CRATES/06-myth-embed.md`
 
