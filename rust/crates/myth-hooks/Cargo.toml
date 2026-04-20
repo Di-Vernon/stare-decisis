@@ -23,5 +23,18 @@ anyhow = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
-# [[bin]] targets are added in Task 3.2..3.5 as each hook binary is
-# implemented. Task 3.1 builds the shared `core` library only.
+# Task 3.2 — simple 3 bins (session-start, user-prompt, stop).
+[[bin]]
+name = "myth-hook-session-start"
+path = "src/bin/session_start.rs"
+
+[[bin]]
+name = "myth-hook-user-prompt"
+path = "src/bin/user_prompt.rs"
+
+[[bin]]
+name = "myth-hook-stop"
+path = "src/bin/stop.rs"
+
+# [[bin]] targets for pre-tool / post-tool / post-tool-failure land
+# in Tasks 3.3..3.5.
