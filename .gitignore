@@ -1,0 +1,37 @@
+# Rust
+rust/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Node (just in case)
+node_modules/
+
+# Claude Code per-user
+.claude/settings.local.json
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# myth runtime artifacts (should live outside repo, but guard anyway)
+.myth/

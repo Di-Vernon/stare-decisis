@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "myth_py"
+version = "0.1.0"
+description = "myth Python layer (Assessor, Observer)"
+authors = ["Jeffrey"]
+license = "MIT OR Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+anthropic = "^0.42"           # Milestone A 이후 Tier 3 활성
+pydantic = "^2.7"
+typer = "^0.12"
+pyyaml = "^6.0"
+rich = "^13.7"                # 터미널 출력
+python-dateutil = "^2.9"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.2"
+pytest-asyncio = "^0.23"
+mypy = "^1.10"
+ruff = "^0.5"
+
+[tool.poetry.scripts]
+myth-assessor = "myth_py.assessor.cli:app"
+myth-observer = "myth_py.observer.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

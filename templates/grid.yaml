@@ -1,0 +1,4 @@
+# placeholder — populated in Wave 7.
+# See docs/09-CLAUDE-PROMPTS.md §Task 7.3 (Grid YAML).
+version: 1
+matrix: {}
