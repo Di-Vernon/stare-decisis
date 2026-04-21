@@ -549,6 +549,58 @@ N=100 warm, tempdir HOME + XDG_* 제거. 재측정 스크립트:
 - Milestone C 완료 후 daemon 인프라를 post_tool 계열에 재활용할지는
   **별도 제안서** 사안. 현재 계획 없음.
 
+### Wire-through Connection 공유 패턴
+
+`post_tool` / `post_tool_failure` / `pre_tool`는 `state.db::hook_events`
+테이블에 `latency_ms`를 wire-through로 기록한다 (Task 3.6 Step c). 이
+세 bin은 Gavel 판정 또는 Tier 0 lesson 관리를 위해 **이미 state.db
+Connection을 열고 있는 경로**를 가진다. 이때 runner의
+`persist_hook_event`가 **별도 Connection을 또 open**하면 같은
+프로세스 안에서 state.db를 두 번 여는 셈이 된다.
+
+Connection 단일 open 비용 ≈ 30ms (WAL init + PRAGMA 4종 + migration
+check, `rust/crates/myth-db/src/sqlite/pragmas.rs` 참조, `Day-1 실측
+P99` 테이블의 Tier 0 − Tier 1 차감 추정). 2중 open 시
+`ARCHITECTURE.md` §4 line 264 엄격 예산 (단일 hook event P99 < 50ms)을
+초과한다. 실측 증거: 초기 구현에서 post_tool_failure Tier 0가
+36.41ms → 67.48ms (+31.07ms)로 회귀했다. 자발적 정정을 거쳐 아래
+공유 패턴으로 복원.
+
+**공유 규칙 (필수)**:
+
+1. bin은 main 로직 진입 시
+   `Database::open(&myth_common::state_db_path())`로 Connection을 **한
+   번만** 연다.
+2. `Gavel` / `SqliteLessonStore` 등 state.db 소비자는 bin이 연
+   Connection을 **인자로 전달받아** 사용한다 (ownership 이동 또는
+   `&Database` borrow).
+3. bin의 본 로직 종료 직전, 해당 Connection을 `HookOutcome`에 담아
+   runner에 반환한다. runner는 해당 Connection으로
+   `persist_hook_event`를 호출하여 `hook_events` row를 insert한다.
+4. Connection은 runner가 drop한다 (프로세스 종료 시점에 자연 해제).
+
+**신규 API (myth-gavel / myth-db 확장, break 아님)**:
+
+- `myth_gavel::Gavel::init_with_db(db: Database) -> Result<Self>`:
+  기존 `init()`의 Database 자동 open 경로를 우회, 외부 공유 Connection
+  을 받아 초기화. 기존 `init()`는 단독 사용 경로용으로 유지.
+- `myth_db::SqliteLessonStore::into_db(self) -> Database`: lesson 작업
+  완료 후 내부 Connection을 외부로 반환. 기존 `new(db)` 생성자와
+  대칭.
+
+두 신규 API는 기존 API를 **깨지 않는 확장** — 기존 `init()` / `new(db)`
+호출은 무변경. Task 3.6 Step c scope 내에서 허용되는 범위의 다른 crate
+수정 (backward compatible 확장).
+
+**금지**:
+
+- `persist_hook_event`가 내부에서 `Database::open`을 새로 호출 — 이
+  경로는 Step c 초기 구현에 도입되었다가 Tier 0 50ms 예산 초과로
+  제거됐다.
+- bin 내부에서 `Database::open`을 2회 이상 호출.
+- Connection을 단순 재오픈으로 "공유"하는 것 (Clone 환상). SQLite
+  Connection은 open마다 PRAGMA 재적용이 필요하므로 비용 절감 없음.
+
 ### 종전 "~1ms 목표" 문구
 
 이 문구는 설계 당시 aspirational target이었다. Day-1 SQLite
