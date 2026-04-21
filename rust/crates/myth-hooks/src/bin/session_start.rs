@@ -34,7 +34,7 @@ fn truncate_brief(brief: &str, max_bytes: usize) -> String {
 fn main() -> ExitCode {
     run_hook("session_start", "myth-hook-session-start", |envelope| {
         if !matches!(envelope.payload, HookPayload::SessionStart(_)) {
-            return Ok(HookResult::Allow);
+            return Ok(HookResult::Allow.into());
         }
 
         let brief_path = myth_common::brief_path();
@@ -42,11 +42,11 @@ fn main() -> ExitCode {
         // a plain allow rather than failing the new-session event.
         let brief = match std::fs::read_to_string(&brief_path) {
             Ok(b) => b,
-            Err(_) => return Ok(HookResult::Allow),
+            Err(_) => return Ok(HookResult::Allow.into()),
         };
 
         if brief.trim().is_empty() {
-            return Ok(HookResult::Allow);
+            return Ok(HookResult::Allow.into());
         }
 
         let injected = truncate_brief(&brief, BRIEF_MAX_BYTES);
@@ -58,7 +58,8 @@ fn main() -> ExitCode {
                 "hookEventName": "SessionStart",
                 "additionalContext": context,
             }
-        })))
+        }))
+        .into())
     })
 }
 

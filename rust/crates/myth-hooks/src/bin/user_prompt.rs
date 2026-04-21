@@ -20,7 +20,7 @@ fn main() -> ExitCode {
         "myth-hook-user-prompt",
         |envelope| {
             if !matches!(envelope.payload, HookPayload::UserPromptSubmit(_)) {
-                return Ok(HookResult::Allow);
+                return Ok(HookResult::Allow.into());
             }
 
             let path = myth_common::lesson_state_path();
@@ -33,7 +33,7 @@ fn main() -> ExitCode {
                 );
             }
 
-            Ok(HookResult::Allow)
+            Ok(HookResult::Allow.into())
         },
     )
 }

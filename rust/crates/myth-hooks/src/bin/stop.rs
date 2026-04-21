@@ -19,23 +19,23 @@ fn is_tier2_enabled() -> bool {
 fn main() -> ExitCode {
     run_hook("stop", "myth-hook-stop", |envelope| {
         if !matches!(envelope.payload, HookPayload::Stop(_)) {
-            return Ok(HookResult::Allow);
+            return Ok(HookResult::Allow.into());
         }
 
         // stop_hook_active indicates Claude Code already blocked once
         // this turn — second trigger must be a no-op to avoid loops.
         if envelope.common.stop_hook_active {
             tracing::debug!("stop_hook_active set — short-circuiting");
-            return Ok(HookResult::Allow);
+            return Ok(HookResult::Allow.into());
         }
 
         if !is_tier2_enabled() {
-            return Ok(HookResult::Allow);
+            return Ok(HookResult::Allow.into());
         }
 
         // Milestone A target path — reinforce a missed assessor
         // trigger with Variant B. Not implemented until then.
-        Ok(HookResult::Allow)
+        Ok(HookResult::Allow.into())
     })
 }
 

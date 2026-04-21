@@ -28,6 +28,23 @@ impl Gavel {
         let rules = RuleSet::load_all().context("loading rule sets")?;
         let db = Database::open(&myth_common::state_db_path())
             .context("opening state.db")?;
+        Self::from_shared_db(rules, db)
+    }
+
+    /// Task 3.6 Step c — Connection sharing entry. Caller already
+    /// owns a `Database` (typically opened by a hook bin that wants
+    /// to reuse it for `hook_events::insert`) and hands it to the
+    /// Gavel. Pair with `into_db()` below to reclaim the connection
+    /// after `judge()` returns.
+    ///
+    /// Rules are still loaded from `RuleSet::load_all`; the only
+    /// difference from `init()` is that the db is supplied externally.
+    pub fn init_with_db(db: Database) -> anyhow::Result<Self> {
+        let rules = RuleSet::load_all().context("loading rule sets")?;
+        Self::from_shared_db(rules, db)
+    }
+
+    fn from_shared_db(rules: RuleSet, db: Database) -> anyhow::Result<Self> {
         let grid = Grid::load(&db).context("loading grid")?;
         let lesson_store: Box<dyn LessonStore> = Box::new(SqliteLessonStore::new(db));
         Ok(Self {
@@ -36,6 +53,14 @@ impl Gavel {
             lesson_store,
             fatigue: Mutex::new(FatigueTracker::new()),
         })
+    }
+
+    /// Consume the Gavel and reclaim the underlying `Database` if the
+    /// lesson store was a `SqliteLessonStore`. `None` for mock stores
+    /// or other implementations that don't own a database. See
+    /// `LessonStore::into_boxed_db`.
+    pub fn into_db(self) -> Option<Database> {
+        self.lesson_store.into_boxed_db()
     }
 
     pub fn from_parts(

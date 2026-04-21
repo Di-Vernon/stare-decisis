@@ -18,7 +18,7 @@ pub use core::input::{
     PreToolUseData, SessionStartData, StopData, UserPromptSubmitData,
 };
 pub use core::latency::{record as record_latency, record_ignore_err as record_latency_quiet};
-pub use core::output::HookResult;
+pub use core::output::{HookOutcome, HookResult, PartialHookEvent};
 pub use core::runner::run_hook;
 pub use core::session::parse_claude_session_id;
 pub use tier0::{classify as classify_tier0, DeterministicClassification};

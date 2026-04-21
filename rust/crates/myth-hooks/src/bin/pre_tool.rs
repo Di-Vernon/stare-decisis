@@ -16,23 +16,49 @@
 
 use std::process::ExitCode;
 
+use anyhow::Context;
 use mimalloc::MiMalloc;
 use myth_common::Enforcement;
+use myth_db::events::{HookEventType, Verdict as DbVerdict};
+use myth_db::Database;
 use myth_gavel::{Gavel, ToolInput};
 use myth_hooks::core::session::parse_claude_session_id;
-use myth_hooks::{run_hook, HookPayload, HookResult};
+use myth_hooks::{run_hook, HookOutcome, HookPayload, HookResult, PartialHookEvent};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+/// Collapse Gavel's 7-level `Enforcement` onto the 3-state
+/// `hook_events.verdict` column (allow / ask / deny). Advisory + Caution
+/// both map to allow because Claude Code is still permitted to run the
+/// tool; only Warn routes to ask and only Strike/Seal deny.
+fn db_verdict_from(enforcement: Enforcement) -> DbVerdict {
+    match enforcement {
+        Enforcement::Dismiss
+        | Enforcement::Note
+        | Enforcement::Advisory
+        | Enforcement::Caution => DbVerdict::Allow,
+        Enforcement::Warn => DbVerdict::Ask,
+        Enforcement::Strike | Enforcement::Seal => DbVerdict::Deny,
+    }
+}
 
 fn main() -> ExitCode {
     run_hook("pre_tool", "myth-hook-pre-tool", |envelope| {
         let data = match &envelope.payload {
             HookPayload::PreToolUse(d) => d,
-            _ => return Ok(HookResult::Allow),
+            _ => return Ok(HookResult::Allow.into()),
         };
 
-        let gavel = Gavel::init()?;
+        // Task 3.6 Step c — Connection sharing. Open state.db once
+        // here, lend it to the Gavel via `init_with_db`, then reclaim
+        // it via `into_db` so the runner's `persist_hook_event` uses
+        // the same connection for the `hook_events` insert. The
+        // alternative (Gavel opens its own db + runner opens another)
+        // pushes pre_tool above 37 ms — Milestone C trigger territory.
+        let db = Database::open(&myth_common::state_db_path())
+            .context("opening state.db")?;
+        let gavel = Gavel::init_with_db(db)?;
         let session_id = parse_claude_session_id(&envelope.common.session_id)?;
 
         // Gavel regexes run against a serialized JSON string so every
@@ -50,6 +76,14 @@ fn main() -> ExitCode {
 
         let verdict = gavel.judge(&input);
         let json = verdict.to_hook_json();
+        let db_verdict = db_verdict_from(verdict.enforcement);
+        let lesson_id = verdict.lesson_id;
+
+        // Reclaim the shared db before dropping the Gavel. In
+        // production SqliteLessonStore always honours this; the
+        // fallback path (fresh open by the runner) kicks in only if
+        // a mock store is used, which is a test-only concern.
+        let shared_db = gavel.into_db();
 
         let result = match verdict.enforcement {
             Enforcement::Dismiss | Enforcement::Note => HookResult::Allow,
@@ -57,7 +91,19 @@ fn main() -> ExitCode {
             Enforcement::Warn => HookResult::Ask(json),
             Enforcement::Strike | Enforcement::Seal => HookResult::Block { output: json },
         };
-        Ok(result)
+
+        let event = PartialHookEvent {
+            session_id,
+            event_type: HookEventType::PreTool,
+            tool_name: Some(data.tool_name.clone()),
+            verdict: db_verdict,
+            lesson_id,
+        };
+        let mut outcome = HookOutcome::from(result).with_event(event);
+        if let Some(db) = shared_db {
+            outcome = outcome.with_db(db);
+        }
+        Ok(outcome)
     })
 }
 

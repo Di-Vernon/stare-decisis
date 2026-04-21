@@ -25,10 +25,12 @@ use std::process::ExitCode;
 
 use mimalloc::MiMalloc;
 use myth_common::{Category, LessonId, ReminderId};
+use myth_db::events::{HookEventType, Verdict as DbVerdict};
 use myth_db::{Database, JsonlWriter, Lesson, LessonStatus, LessonStore, SqliteLessonStore};
+use myth_hooks::core::session::parse_claude_session_id;
 use myth_hooks::{
-    classify_tier0, records, run_hook, templates, DeterministicClassification, HookPayload,
-    HookResult, PostToolUseFailureData,
+    classify_tier0, records, run_hook, templates, DeterministicClassification, HookOutcome,
+    HookPayload, HookResult, PartialHookEvent, PostToolUseFailureData,
 };
 use myth_identity::{normalize_aggressive, tier1_hash};
 use serde_json::json;
@@ -43,19 +45,37 @@ fn main() -> ExitCode {
         |envelope| {
             let data = match &envelope.payload {
                 HookPayload::PostToolUseFailure(d) => d,
-                _ => return Ok(HookResult::Allow),
+                _ => return Ok(HookResult::Allow.into()),
             };
             let session_id_str = envelope.common.session_id.as_str();
+            let session_id = parse_claude_session_id(session_id_str)?;
 
-            if let Some(c) = classify_tier0(&data.error) {
-                // Tier 0 resolved. All observability writes are
-                // fire-and-forget — never block on JSONL/DB failure.
-                if let Err(e) = record_tier0(session_id_str, data, &c) {
-                    tracing::warn!(error = %e, "Tier 0 record failed (observability-only)");
+            // Task 3.6 Step c: both Tier 0 and Tier 1 build a
+            // PartialHookEvent — the runner stamps the canonical
+            // latency and appends the row after its own timer stops.
+            // Tier 0 recovers the lesson_id from the record helper
+            // (record_tier0 returns the upserted LessonId); Tier 1
+            // has no lesson yet, so lesson_id stays None.
+
+            let (result, lesson_id, shared_db) = if let Some(c) = classify_tier0(&data.error) {
+                // Tier 0 resolved. JSONL / DB writes are observability-
+                // class — swallow failures so the hook still returns
+                // Allow, but keep the lesson id AND the underlying
+                // Database when the upsert did succeed. Sharing that
+                // db with the runner avoids a second Database::open
+                // for the hook_events insert (Task 3.6 Step c).
+                match record_tier0(session_id_str, data, &c) {
+                    Ok((id, db)) => (HookResult::Allow, Some(id), Some(db)),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Tier 0 record failed (observability-only)");
+                        (HookResult::Allow, None, None)
+                    }
                 }
-                Ok(HookResult::Allow)
             } else {
-                // Tier 0 miss → Tier 1 Variant B template.
+                // Tier 0 miss → Tier 1 Variant B template. Tier 1
+                // doesn't touch state.db, so no shared_db to hand up;
+                // the runner will fall back to a single fresh open
+                // for the hook_events insert (one open total).
                 let reminder_id = ReminderId::new();
                 let template = templates::variant_b::render(data, reminder_id);
 
@@ -63,14 +83,28 @@ fn main() -> ExitCode {
                     tracing::warn!(error = %e, "Tier 1 record failed (observability-only)");
                 }
 
-                Ok(HookResult::AllowWithContext(json!({
+                let json_out = json!({
                     "continue": true,
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUseFailure",
                         "additionalContext": template,
                     }
-                })))
+                });
+                (HookResult::AllowWithContext(json_out), None, None)
+            };
+
+            let event = PartialHookEvent {
+                session_id,
+                event_type: HookEventType::PostToolFailure,
+                tool_name: Some(data.tool_name.clone()),
+                verdict: DbVerdict::Allow,
+                lesson_id,
+            };
+            let mut outcome = HookOutcome::from(result).with_event(event);
+            if let Some(db) = shared_db {
+                outcome = outcome.with_db(db);
             }
+            Ok(outcome)
         },
     )
 }
@@ -79,7 +113,7 @@ fn record_tier0(
     session_id_str: &str,
     data: &PostToolUseFailureData,
     c: &DeterministicClassification,
-) -> anyhow::Result<LessonId> {
+) -> anyhow::Result<(LessonId, Database)> {
     let normalized = normalize_aggressive(&data.error);
     let hash = tier1_hash(&normalized);
     let ts = myth_common::format_iso(&myth_common::now());
@@ -152,7 +186,9 @@ fn record_tier0(
         tool_name: &data.tool_name,
     })?;
 
-    Ok(lesson_id)
+    // Reclaim the store's Connection so the runner can reuse it for
+    // the hook_events insert — avoids a second Database::open.
+    Ok((lesson_id, store.into_db()))
 }
 
 fn record_tier1(

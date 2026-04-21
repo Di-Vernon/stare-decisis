@@ -61,6 +61,22 @@ pub trait LessonStore {
     fn list_active(&self) -> anyhow::Result<Vec<Lesson>>;
     fn list_lapsed(&self) -> anyhow::Result<Vec<Lesson>>;
     fn mark_status(&self, id: LessonId, status: LessonStatus) -> anyhow::Result<()>;
+
+    /// Consuming escape hatch for implementations that own a
+    /// single-writer `Database`. Default returns `None` so mocks and
+    /// non-SQL stores stay unaffected. `SqliteLessonStore` overrides
+    /// this to surrender its underlying connection, enabling Task 3.6
+    /// Step c Connection sharing: Gavel can hand the same db that
+    /// powered `find_by_identity` back to the hook runner for the
+    /// `hook_events` insert, avoiding a second `Database::open` whose
+    /// cost (~30 ms WAL+PRAGMA+migration) would push post_tool_failure
+    /// Tier 0 above the 50 ms ARCHITECTURE §4 line 264 budget.
+    ///
+    /// The `self: Box<Self>` receiver is object-safe; trait objects
+    /// call through the vtable.
+    fn into_boxed_db(self: Box<Self>) -> Option<Database> {
+        None
+    }
 }
 
 pub struct SqliteLessonStore {
@@ -76,6 +92,15 @@ impl SqliteLessonStore {
     /// `LessonStore` (e.g. `events::insert`, `appeal::file_appeal`).
     pub fn db(&self) -> &Database {
         &self.db
+    }
+
+    /// Consume the store and return the inner `Database`. Task 3.6
+    /// Step c's hook_events wire-through uses this on the
+    /// post-tool-failure Tier 0 path so the same `Database::open` that
+    /// powered the lesson upsert can be reused for the `hook_events`
+    /// insert. Symmetric with `new(db)`.
+    pub fn into_db(self) -> Database {
+        self.db
     }
 }
 
@@ -240,6 +265,10 @@ impl LessonStore for SqliteLessonStore {
             )
             .context("marking status")?;
         Ok(())
+    }
+
+    fn into_boxed_db(self: Box<Self>) -> Option<Database> {
+        Some((*self).into_db())
     }
 }
 
