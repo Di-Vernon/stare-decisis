@@ -512,20 +512,43 @@ fire-and-forget. 실패 시 eprintln 경고만.
 
 ### Day-1 실측 P99
 
-(Task 3.6 Step e, 2026-04-21. release build + hyperfine `-N --input`,
-N=100 warm, tempdir HOME + XDG_* 제거. 재측정 스크립트:
-`scripts/bench-hooks.sh`.)
+(release build + hyperfine `-N --input`, N=100 warm, tempdir HOME +
+XDG_* 제거. 측정 스크립트: `scripts/bench-hooks.sh`.)
 
-| bin | 시나리오 | P99 |
-|---|---|---|
-| pre_tool | empty rules | 6.00 ms |
-| post_tool | success + DB insert | 33.60 ms |
-| post_tool_failure | Tier 0 (DB + 3 JSONL) | 36.41 ms |
-| post_tool_failure | Tier 1 (3 JSONL only) | 6.55 ms |
-| user_prompt | Day-1 read-only | 2.95 ms |
-| stop | Tier 2 off | 3.18 ms |
-| session_start | no brief | 3.37 ms |
-| session_start | with brief | 3.94 ms |
+| bin | 시나리오 | P99 (Step e, edf7a62) | P99 (dd166f9 재측) |
+|---|---|---|---|
+| pre_tool | empty rules | 6.00 ms | **2.89 ms** |
+| post_tool | success + DB insert | 33.60 ms | 30.43 ms |
+| post_tool_failure | Tier 0 (DB + 3 JSONL) | 36.41 ms | **36.48 ms** |
+| post_tool_failure | Tier 1 (3 JSONL only) | 6.55 ms | 5.86 ms |
+| user_prompt | Day-1 read-only | 2.95 ms | 3.52 ms |
+| stop | Tier 2 off | 3.18 ms | 3.72 ms |
+| session_start | no brief | 3.37 ms | 3.18 ms |
+| session_start | with brief | 3.94 ms | 3.45 ms |
+
+두 열 모두 2026-04-21 동일일자 측정. Step e 열은 edf7a62 기록 시점
+값, 재측 열은 dd166f9 baseline 빌드 재측정 값.
+
+**재측정 동기**: Task 3.6 Step c Connection 공유 검증 중 Step c'
+pre_tool P99 33.28 ms 관찰 → Step e pre_tool 6.00 ms 기반 "< 15 ms"
+조건과 모순 → Step e baseline 재현 가능성 검증 목적으로 dd166f9
+커밋 재측정 수행.
+
+**bench 노이즈 특성**: DB-touching path (post_tool_failure Tier 0)는
+36.41 vs 36.48 ms (Δ 0.2 %)로 **고도 재현** — `Database::open` 구조
+상수 ~30 ms가 P99를 지배하여 환경 노이즈가 상대적으로 무시됨. 반면
+非-DB path (pre_tool, Tier 1, user_prompt, stop, session_start
+양자)는 2-6 ms 영역이 WSL2 측정 노이즈 하한에 근접, **±20-30 % 상대
+변동**. pre_tool 52 % 편차(6.00 → 2.89)는 이 노이즈 특성의 가장자리.
+
+**함의**:
+
+- bench 非-DB bin P99는 ±30 % 해석 여유 필요 (이 테이블도 포함).
+- bench DB-touching bin P99는 신뢰 가능한 구조 비용 측정치.
+- **Milestone C 트리거**는 bench 측정이 아닌 `~/.local/state/myth/
+  hook-latency.ndjson` **production 집계** 기준 (ARCHITECTURE.md §4
+  line 259). bench는 회귀 감지 + 구조 비용 격리 + 하한 근사의 **진단
+  도구**. bench P99 값만으로 Milestone C 착수 판정 불가.
 
 ### post_tool / post_tool_failure Tier 0 bottleneck 및 스코프 판정
 
@@ -610,13 +633,23 @@ migration check 반복)로 **달성 불가능**하다는 것이 Task 3.6 Step e
 
 ### pre_tool 및 나머지
 
-`pre_tool`의 P99 6.00ms는 "P99 < 10ms" (Milestone C 트리거 15ms의
-절반 이하) 조건과 정합. Milestone C 조건(P99 > 15ms × 2주) 대비 9ms
-여유.
+`pre_tool` bench P99는 **2.89~6.00 ms** 범위 (非-DB bin 노이즈 영역,
+위 테이블 2컬럼 참조). Milestone C 트리거(P99 > 15 ms × 2주)는
+bench가 아닌 `hook-latency.ndjson` **production 집계** 기준
+(ARCHITECTURE.md §4 line 259, 해석 X) → 현재 bench 측정은 Milestone
+C 전환 근거가 아니다. 해석 C ("post_tool 계열은 50 ms 예산 내 상시
+수용, Milestone C 전환 계획 없음")는 해석 X 위에서 정합을 유지.
+
+참고: Step c Connection 공유 후 `pre_tool` bench P99는 최초 DB open
+비용으로 **~33 ms** 수준(Step c'). 이는 구조 상수 ~30 ms가 bench의
+cold-cache tempdir 측정에 그대로 드러난 수치이며, production
+warm-cache 환경의 실제 P99가 아니다. 본 bench 수치는 회귀 감지
+기준점 — 상세 논의는 §Wire-through Connection 공유 패턴 및 wave-3.6c
+커밋 본문 참조.
 
 나머지 bin (`user_prompt` / `stop` / `session_start` /
-`post_tool_failure` Tier 1)는 전부 2.9~6.6ms 범위로 `ARCHITECTURE.md`
-§4 line 264 엄격 예산 대비 넉넉.
+`post_tool_failure` Tier 1) bench P99는 2.9~6.6 ms 범위로
+ARCHITECTURE.md §4 line 264 엄격 예산(50 ms) 대비 넉넉.
 
 ## 테스트
 
