@@ -1,14 +1,9 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! `myth-cli` — user-facing entrypoint.
+//!
+//! `main.rs`에서 parse → dispatch. 상위 레이어 공개 타입은 args 모듈.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod args;
+pub mod output;
+pub mod subcmd;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use args::{Command, MythArgs, OutputFormat};
