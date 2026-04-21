@@ -172,7 +172,8 @@ fn run() -> HookResult {
 }
 ```
 
-~1ms 목표.
+Day-1 실측 P99 33.60ms. 종전 "~1ms 목표" 문구는 aspirational target이었고
+Day-1 SQLite open 비용의 구조적 상수로 달성 불가 — 상세는 §공통 성능 예산 참조.
 
 ## bin 3 — `myth-hook-post-tool-failure` (Assessor 트리거)
 
@@ -505,11 +506,65 @@ fire-and-forget. 실패 시 eprintln 경고만.
 - allocator init (mimalloc): ~0.1ms
 - logging init: ~0.2ms
 - stdin JSON 파싱: ~0.1ms
-- 본 로직: crate별 (pre_tool 1~5ms, post_tool <0.5ms, etc.)
+- 본 로직: crate별 (아래 실측 테이블 참조)
 - latency 기록: ~0.1ms (fire-and-forget)
 - exit/dtors: ~0.1ms
 
-`pre_tool` 외 나머지는 대부분 2-3ms 이하.
+### Day-1 실측 P99
+
+(Task 3.6 Step e, 2026-04-21. release build + hyperfine `-N --input`,
+N=100 warm, tempdir HOME + XDG_* 제거. 재측정 스크립트:
+`scripts/bench-hooks.sh`.)
+
+| bin | 시나리오 | P99 |
+|---|---|---|
+| pre_tool | empty rules | 6.00 ms |
+| post_tool | success + DB insert | 33.60 ms |
+| post_tool_failure | Tier 0 (DB + 3 JSONL) | 36.41 ms |
+| post_tool_failure | Tier 1 (3 JSONL only) | 6.55 ms |
+| user_prompt | Day-1 read-only | 2.95 ms |
+| stop | Tier 2 off | 3.18 ms |
+| session_start | no brief | 3.37 ms |
+| session_start | with brief | 3.94 ms |
+
+### post_tool / post_tool_failure Tier 0 bottleneck 및 스코프 판정
+
+**Bottleneck**: 매 invocation마다 `Database::open` → WAL init →
+`PRAGMA` 4종 → migration check → prepare → insert → drop 반복.
+추정 비용 ≈ 30 ms.
+
+**근거 강도**: Tier 0 − Tier 1 차감 추정 (36.41 − 6.55 = 29.86 ms).
+직접 측정(`Database::open` 격리 bench)은 Milestone C 설계 검토 시
+수행 예정. "SQLite가 아니라 migration check였다" 같은 반론은 직접
+측정 수행 시 수용.
+
+**Milestone 스코프 판정** (Task 3.6, Jeffrey 승인 2026-04-21):
+
+- Milestone C(Gavel Daemon)는 **pre_tool 전용**.
+  `ARCHITECTURE.md` §4 line 256-289의 `myth-hook-pre-tool --daemon`
+  구조에 국한된다.
+- post_tool / post_tool_failure Tier 0는 **`ARCHITECTURE.md` §4 line
+  264의 엄격 예산 (단일 hook event P99 < 50ms) 내 상시 수용**.
+  Day-1 실측은 해당 예산 내 (33.60ms, 36.41ms 모두 < 50ms).
+- Milestone C 완료 후 daemon 인프라를 post_tool 계열에 재활용할지는
+  **별도 제안서** 사안. 현재 계획 없음.
+
+### 종전 "~1ms 목표" 문구
+
+이 문구는 설계 당시 aspirational target이었다. Day-1 SQLite
+`Connection::open` 비용의 구조적 상수(매 fork+exec 후 WAL/PRAGMA/
+migration check 반복)로 **달성 불가능**하다는 것이 Task 3.6 Step e
+실측으로 확정. 본 섹션의 실측 테이블이 이를 대체한다.
+
+### pre_tool 및 나머지
+
+`pre_tool`의 P99 6.00ms는 "P99 < 10ms" (Milestone C 트리거 15ms의
+절반 이하) 조건과 정합. Milestone C 조건(P99 > 15ms × 2주) 대비 9ms
+여유.
+
+나머지 bin (`user_prompt` / `stop` / `session_start` /
+`post_tool_failure` Tier 1)는 전부 2.9~6.6ms 범위로 `ARCHITECTURE.md`
+§4 line 264 엄격 예산 대비 넉넉.
 
 ## 테스트
 
