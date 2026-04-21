@@ -563,3 +563,57 @@ SQLite와 JSONL, vectors.bin이 **한 lesson에 대해 일관되어야** 한다.
 - Decision 1 (벡터 저장소): `vector_metadata` 테이블과 vectors.bin 파일 포맷
 - 카테고리 7 (문서 파일): caselog.jsonl, brief.md, audit.jsonl 이름 확정
 - 카테고리 6 (Lapse): lesson.lapse_score 필드, lesson-state.jsonl의 lapsed 이벤트
+
+---
+
+## Wave 7 drift sync (Wave 8 Task 8.4)
+
+### Grid sub-1b — templates/grid.yaml 런타임 미로드
+
+`templates/grid.yaml`은 `install.rs`가 `~/.myth/grid.yaml`로 복사하지만
+**런타임 reload 없음**. `Grid::load()` (rust/crates/myth-gavel/src/grid/
+mod.rs)는 DB `grid_overrides` 테이블만 조회하고, 기본값은 `default.rs`의
+`DEFAULT_MATRIX` 상수를 사용한다.
+
+**결과**: 사용자가 `~/.myth/grid.yaml`을 수동 편집해도 실행 시 반영 안 됨.
+
+**대응 (Day-1)**: `templates/grid.yaml` 헤더 주석에 경고 박제. 실제 셀
+enforcement 변경은 `grid_overrides` 테이블에 INSERT 필요 (Admin 승인
+경로). Observer 주간 리포트가 이 테이블 수정을 제안할 수 있음 (Article
+7 Sovereignty — Admin 승인 후 Observer 반영).
+
+**Milestone C**: Gavel daemon 전환 시 grid.yaml reload 로직 추가 검토.
+daemon이 SIGHUP 수신 시 `Grid::load` 재호출로 yaml 반영 가능한 형태로
+설계.
+
+### Schema v1 — lesson split/merge relations (Option B)
+
+Wave 8 Task 8.1에서 lesson split/merge 실구현 시 schema v1 유지 (migration
+002 추가 없음). Parent ↔ Children 관계는 `lessons.meta_json` (arbitrary
+JSON) 필드에 저장:
+
+```json
+// Parent (superseded)
+{"split_to": ["<child_uuid_1>", "<child_uuid_2>"], "split_reason": "..."}
+
+// Child (active)
+{"split_from": "<parent_uuid>", "split_reason": "...", "split_part": 1}
+
+// Merge source (superseded)
+{"merged_into": "<new_uuid>", "merge_reason": "..."}
+
+// Merge result (active)
+{"merged_from": ["<src1_uuid>", "<src2_uuid>"], "merge_reason": "..."}
+```
+
+**인덱스 부재**: "find all children of X" 조회는 전체 meta_json 스캔 필요.
+Day-1 split/merge 호출 빈도 낮음 (observer 주간 + 명시적 appeal 반영만)이라
+JSON 파싱 비용 수용. Milestone C에서 `parent_lesson_id BLOB` 인덱스 필드
+추가 여부 재검토 (Gavel daemon SQLite 액세스 패턴 일괄 재설계).
+
+### Migration cold-start race (carry-forward 5)
+
+`migration.rs`의 `user_version` 체크 + `CREATE TABLE`이 트랜잭션 밖. N
+서브프로세스가 최초 `Database::open`을 동시 호출 시 CREATE 충돌 가능.
+Wave 7 Task 7.6 warm-up 우회로 테스트 통과. 근본 수정은 Milestone C
+연기 (Gavel daemon 전환 시 SQLite 접근 재설계와 묶음).

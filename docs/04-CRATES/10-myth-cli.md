@@ -891,3 +891,65 @@ tests/
 - 카테고리 8 (사용자 행동): appeal/retrial/split/merge 모두 이 CLI에서 실행
 - ARCHITECTURE §7 (파일 레이아웃): install.sh의 Rust 재구현이 `myth install` 서브커맨드
 - 네이밍 전체: 모든 서브커맨드가 확정 용어를 반영
+
+---
+
+## Wave 8 drift sync (Task 8.4)
+
+### Task 8.1 — lesson split/merge 실구현 (stub 해소)
+
+Wave 5의 `split_merge_stub()` 대체. 실제 로직은 `subcmd/lesson.rs`의
+`split()` / `merge()` 함수. Schema v1 유지 (Option B meta_json) —
+migration 002 미추가.
+
+**Split** (`myth lesson split <id> --reason <r>`):
+- 원본 lesson: `status='superseded'`, `meta_json += {split_to:[c1,c2],
+  split_reason}`
+- 자식 2개: 신규 UUID, `recurrence_count=0`, `status='active'`,
+  `meta_json = {split_from, split_reason, split_part: 1|2}`.
+  `identity_hash_tier1`은 부모에서 상속 (후속 appeal/retrial로 refine).
+
+**Merge** (`myth lesson merge <id1> <id2> --reason <r>`):
+- 양측 source: `status='superseded'`, `meta_json += {merged_into,
+  merge_reason}`
+- 신규 merged lesson: 신규 UUID + `tier1_hash(normalize(combined
+  description))`. `level = max(l1, l2)` (위험 쪽 기울임).
+  `recurrence_count = l1 + l2` (history 보존). `meta_json = {merged_from,
+  merge_reason}`.
+
+**제약**:
+- superseded / archived lesson split·merge 금지
+- 자기 자신과 merge 금지
+- `find_by_prefix` 경로는 active + lapsed만 탐색 (superseded 조회 불가)
+
+**성능 주석** (lesson.rs header docstring):
+
+> Split/merge relations stored in `lessons.meta_json` (JSON). No dedicated
+> `parent_lesson_id` / `superseded_by` index (Wave 1 schema v1 preserved).
+> Day-1 call frequency is low (weekly observer + appeal reflection only),
+> JSON parse cost acceptable. Index optimisation deferred to Milestone C
+> (Gavel daemon transition, when SQLite access patterns are re-evaluated).
+
+### Task 8.2 — myth install Python auto-install
+
+`install.rs::install_python_package(&repo_root)` 추가. Rust 심볼릭 링크 +
+`~/.myth/` 초기화 이후 실행.
+
+**선택 순서**: `uv` > `pip3` > `pip`. PATH에 아무것도 없으면 경고 + 수동
+명령 안내 후 skip.
+
+**Best-effort 설계**: 실패 시 warning 출력, `myth install` 자체는 exit 0
+유지. 이유:
+- Rust 측 symlink는 이미 성공했는데 Python 실패로 전체 되돌리면 사용자
+  손실 과도
+- 각 실패 경로마다 정확한 수동 명령을 출력 (copy-paste 복구 가능)
+
+**호출 명령**: `<installer> [pip] install -e ".[dev]"` (`uv`는 `uv pip`
+접두어 추가).
+
+**helper**: `which_exists(name)`가 `sh -c command -v <name>`으로 PATH
+resolution. `which` crate 의존 회피.
+
+**테스트**: `which_exists_resolves_sh` + `which_exists_rejects_bogus` 2개
+유닛. 실제 subprocess install은 테스트에서 실행 안 함 (e2e는 Task 8.6에서
+격리 환경 redirect로 별도 검증).

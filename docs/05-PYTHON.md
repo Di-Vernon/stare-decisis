@@ -654,3 +654,38 @@ python/tests/
 - Decision 4 (Tier 3 SDK): `dispatcher.py` 골격만 Day-1, 실제 호출은 Milestone A 이후
 - 카테고리 1 (Assessor/Observer): Python 모듈 이름 일치
 - 카테고리 7 (brief.md): `brief_gen.py` 출력 파일명 확정
+
+---
+
+## Wave 6 drift 박제 (Wave 8 Task 8.4 sync)
+
+Wave 6 커밋 `adf78f4`가 authoritative. 본 docs/05는 drift 6건을 실제 구현에
+정렬. 코드 수정 0건, 문서 참조만.
+
+- **drift 1** — `assessor/subagent_runner.py`: 미정의 파일. 생성하지 않음.
+  Day-1 Task subagent 경로는 Claude Code 내장으로 충분.
+- **drift 2** — `pyproject.toml` 포맷: docs/05 §pyproject Poetry 표기 vs 실제
+  PEP 621 (Wave 0 산출물 + hatchling backend). PEP 621 채택.
+- **drift 3** — `observer/report.py`: 미정의 파일. 생성하지 않음. Observer
+  Day-1 출력은 `brief_gen.py` 단일 엔트리로 통합.
+- **drift 4** — `assessor/state.py`: 미정의 파일. 생성하지 않음. Day-1
+  observer의 상태 추적은 brief-gen cycle에 흡수됨.
+- **drift 5** — `assessor/cli.py`: docs/05 본문 섹션 부재, pyproject
+  `[project.scripts]` entry 제약. Wave 6에서 `run` stub 커맨드만, Wave 8
+  Task 8.3에서 `classify --input` 추가 (아래 Wave 8 sync 참조).
+- **drift 6** — `observer/lapse.py` sqlite3 인라인 (`myth_py.db` 모듈 도입
+  회피). docs/05 내부 모순 해소: "DB 접근은 Rust 경유"를 관찰성 쿼리 읽기
+  전용에는 예외 적용. 원문은 그대로 유지, 실구현이 단일 예외로 inline.
+- drift 7 (click 8.3 비호환): 커밋 `c9e54a7`로 closed. `click>=8.1,<8.2` 고정.
+
+## Wave 8 Task 8.3 — assessor CLI 추가 (carry-forward #3 해소)
+
+- `myth_py/assessor/cli.py`에 `classify --input <path>` 서브커맨드 추가.
+- Day-1: 고정 JSON `{"status":"not_enabled", "reason":"Tier 3 dispatch is
+  inactive on Day-1 (Milestone A gate, Decision 4)"}` + exit 0.
+- Rust `myth-hooks/src/tier3_dispatch.rs::maybe_tier3_dispatch`가 호출
+  대상. 호출 gate (`tier3_gate_active()`)는 Day-1 `false`, Milestone A
+  flip. Python `classify` 시그니처는 Milestone A에서 동일하게 유지 —
+  Rust 호출부 재수정 불필요.
+- `run` 서브커맨드 메시지: "Wave 8" → "Milestone A" (직접 interactive
+  호출은 Milestone A).

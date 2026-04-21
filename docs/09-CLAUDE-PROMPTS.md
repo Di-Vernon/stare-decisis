@@ -1081,3 +1081,80 @@ UserPromptSubmit hook의 반환 JSON 형식이 약간 다릅니다.
 **Wave 8 완료**: end-to-end 시나리오 + 성능 + license audit → v0.1.0 태그
 
 8개 Wave 모두 green = **Day-1 완료**.
+
+---
+
+## Wave 7/8 실제 scope drift sync (Task 8.4)
+
+실제 실행은 Jeffrey의 수시 재지시로 docs/09 원안보다 확장됨. 본 섹션은
+원안 대비 실제 scope 차이를 박제한다 — docs/09 본문 §Wave 7 / §Wave 8은
+설계 시점 기준으로 그대로 보존, 아래 sync 블록이 실제 구현 기준의 보조
+자료.
+
+### Wave 7 scope 확장
+
+원안 scope: Task 7.1-7.6 (규칙 정의 + fixture + FP=0 + pre-commit hook).
+
+**실제 추가 scope (Jeffrey 승인)**:
+- Task 7.5 fs2 → fs4 migration (carry-forward 재이관 해소)
+- Task 7.6 Tier 0 concurrent write coverage (Wave 3 gap 해소)
+- 커밋 분리 최소 4건 (실제 6건): A 템플릿 / B 560 fixtures / C harness /
+  D fs2→fs4 / E Tier 0 concurrent / F wave-7 close
+
+**자발 해결 drift (stop condition #13 범위)**:
+- Regex 보강 7건 (R1-A/C env 제거 + R1-D clean 양방향 + R2-B URL schemes
+  + R2-C token + quote-wrapper + R2-D quote-wrapper + R3-A verify merge +
+  R3-C case-insensitive)
+- Fixture 13건 수정 (R1-A/C 재배치 3, R2-A 길이 4, R2-D 값 3, negative
+  교체 3)
+
+**박제 drift (Task 8.4 반영)**:
+- **sub-1a**: 15 entries × 209 alternation branches 구조 (docs/09 "47
+  독립 rule id" 프레이밍 대비). 기능 등가 (≥47 detection signatures).
+- **sub-1b**: Grid는 Level × Recurrence 좌표 설계, rule id 미참조.
+  templates/grid.yaml 런타임 미로드 (→ docs/07 §Grid sub-1b).
+- **sub-1c**: FP=0 harness 판정 entry 단위. Internal alternation
+  커버리지는 fixture 다양성으로 간접 검증.
+- **sub-1d**: myth-db migration cold-start race (Wave 7 Task 7.6 warm-up
+  우회, 근본 수정 Milestone C 연기).
+
+### Wave 8 scope 확장
+
+원안 scope: Task 8.1 e2e + Task 8.2 성능 + Task 8.4 tag (3 task).
+
+**실제 scope (Jeffrey 플랜)**:
+- Task 8.1 — lesson split/merge 실구현 (Wave 5 stub 해소)
+- Task 8.2 — install.rs Python auto-install
+- Task 8.3 — assessor Tier 3 wiring (구조만, Day-1 비활성)
+- Task 8.4 — docs 일괄 sync (이 섹션 자체)
+- Task 8.5 — CHANGELOG + THIRD-PARTY + LICENSE
+- Task 8.6 — end-to-end 자동 실행 (격리 환경)
+- Task 8.7 — 최종 검증 + Wave 8 close 커밋
+- Task 8.8 — Jeffrey 승인 대기 → v0.1.0 tag (자동 실행 금지)
+
+**판정 결정 이력**:
+- Schema v1 vs v2: **v1 채택** (Option B meta_json). Migration 002 미추가.
+  (Jeffrey 판정, Wave 8 진입 시점)
+- Migration cold-start race → Milestone C 연기 (Jeffrey 판정)
+- Drift 재카운트 threshold: 누적 11건 → Wave 8 내 +3 허용 (=14). (Jeffrey
+  수용)
+
+### 커밋 체인 명세
+
+Wave 7:
+- A `wave-7.1: templates (bedrock 15 / foundation 5 / grid 5x6)`
+- B `wave-7.2+3: 560 fixtures (positive 280 + negative 280)`
+- C `wave-7.4: FP=0 fixture harness + template sanity test`
+- D `wave-7.5: fs2 -> fs4 migration (carry-forward closed)`
+- E `wave-7.6: Tier 0 concurrent write coverage (carry-forward closed)`
+- F `wave-7: close (all exit criteria met, 273 passed)`
+
+Wave 8 (Task별 1 커밋 + close):
+- `wave-8.1: lesson split/merge real impl`
+- `wave-8.2: install.rs Python auto-install`
+- `wave-8.3: assessor Tier 3 dispatch wiring (structure only)`
+- `wave-8.4: docs sync (7 files, Wave 7/8 drift 박제)`
+- `wave-8.5: CHANGELOG + THIRD-PARTY + LICENSE`
+- `wave-8.6: end-to-end scenario`
+- `wave-8.7: final verification`
+- `wave-8: close (Day-1 complete, v0.1.0 ready for tag)`

@@ -634,3 +634,62 @@ Day-1 범위 밖. 운영 중 crash 보고 누적 시 도입 검토.
 - `~/myth/docs/08-BUILD-SCOPE.md` — Day-1 DoD (섹션 6)
 - `~/myth/docs/09-CLAUDE-PROMPTS.md` — 각 Wave의 테스트 작업
 - `~/myth/docs/11-RISKS.md` — 검증으로 커버되지 않는 리스크
+
+---
+
+## Wave 7 실제 통계 (Wave 8 Task 8.4 sync)
+
+### Bedrock Rule
+
+- **Entries**: 15 (R1-A..G, R2-A..D, R3-A..D) — CONSTITUTION Article 7 §
+  Bedrock "정확히 3개 아이템" 준수 (item = rm_rf_unsandboxed, 
+  production_secrets_commit, auth_bypass_production)
+- **Alternation branches**: 209 총합 (R2-A가 40 provider prefix 병합 포함)
+- **Detection signatures 커버리지**: Decision 5 "47 patterns" 기준 **54개**
+  (R1-A~G 7 + R2-A 40 prefix + R2-B~D 3 + R3-A~D 4). Day-1 요구치 상회.
+
+### Foundation Rule
+
+- **Entries**: 5 (F1-A main_force_push, F2-A no_verify_ci_bypass, F3-A
+  pii_exfiltration, F4-A unverified_dependency, F5-A
+  untrusted_arbitrary_execution)
+
+### Grid
+
+- **Cells**: 30 (Level 1-5 × Recurrence I-VI)
+- **Coordinate system**: Level × Recurrence → Enforcement (rule id 미참조).
+  Rule.level 필드 + Lesson.recurrence_count → Grid::lookup → Enforcement
+  3-step 로직.
+- **런타임 로드**: Grid::load()는 DB `grid_overrides` 테이블만 조회.
+  templates/grid.yaml 편집은 런타임 반영 안 됨 (docs/07 sub-1b 참조).
+
+### Fixtures
+
+- **Positive**: 280 cases (15 files, 18-20 per rule)
+- **Negative**: 280 near-miss cases (15 files, 18-20 per rule)
+- **Total**: 560
+- **FP=0 / FN=0**: a02_fixtures_full_sweep 통과
+- **Sanity gate**: a01_harness_sanity (5 obvious positive + 5 obvious
+  negative) — 해시 자체 버그 조기 감지
+
+### 테스트 수치 (Wave 6 baseline 대비)
+
+- Wave 6 baseline: Rust 268 / Python 36
+- Wave 7 종료: Rust 275 / Python 36 (net +7: template_sanity 2 +
+  fixture_harness 2 + tier0_concurrent 1 + lesson split/merge 2)
+- Wave 8 누적: Task별 점진 추가 (Task 8.3 tier3 gate 1 등)
+
+### Harness 판정 단위 (sub-1c)
+
+- Entry 단위 (rule_id). Internal alternation 커버리지는 fixture 다양성으로
+  간접 검증. 특정 alternation 누락 시 해당 case fixture-FN으로 표면화됨.
+
+### Bench ceilings (fs4 검증 기준)
+
+| 시나리오 | Wave 6 상한 | Wave 7 실측 P99 |
+|---|---|---|
+| pre_tool | 36.6 ms | 31.82 ms |
+| post_tool | 35.2 ms | 32.06 ms |
+| post_tool_failure_tier0 | 44.9 ms | 37.27 ms |
+
+fs2 → fs4 migration 후 상한 전부 준수.
