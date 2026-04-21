@@ -11,6 +11,7 @@ dependencies = [
     "anthropic>=0.42,<0.43",        # Milestone A 이후 Tier 3 활성
     "pydantic>=2.7,<3",
     "typer>=0.12,<0.13",
+    "click>=8.1,<8.2",               # Wave 6 drift 7: typer 0.12 호환 범위 고정 (click 8.2+는 Parameter.make_metavar 시그니처 변경으로 typer 0.12 깨짐)
     "pyyaml>=6.0,<7",
     "rich>=13.7,<14",                # 터미널 출력
     "python-dateutil>=2.9,<3",
