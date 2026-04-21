@@ -9,7 +9,7 @@ use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
 
 use anyhow::Context;
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 
 pub struct DaemonLock {
     _file: File,
@@ -36,9 +36,11 @@ pub fn try_acquire() -> anyhow::Result<Option<DaemonLock>> {
         .open(&path)
         .with_context(|| format!("opening {:?}", path))?;
 
+    // fs4 0.13: try_lock_exclusive returns Ok(bool) — true=acquired, false=contention.
     match file.try_lock_exclusive() {
-        Ok(()) => Ok(Some(DaemonLock { _file: file })),
-        Err(_) => Ok(None),
+        Ok(true) => Ok(Some(DaemonLock { _file: file })),
+        Ok(false) => Ok(None),
+        Err(e) => Err(e).context("try_lock_exclusive"),
     }
 }
 

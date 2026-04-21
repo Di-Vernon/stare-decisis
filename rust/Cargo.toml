@@ -56,7 +56,7 @@ clap = { version = "4", features = ["derive"] }
 # Filesystem / XDG
 dirs = "5"
 libc = "0.2"
-fs2 = "0.4"
+fs4 = "0.13"
 
 # Unix (setsid, flock for embed daemon)
 nix = { version = "0.28", features = ["fs"] }

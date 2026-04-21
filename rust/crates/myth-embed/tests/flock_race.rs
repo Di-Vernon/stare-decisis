@@ -6,7 +6,7 @@
 
 use std::fs::OpenOptions;
 
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use tempfile::tempdir;
 
 #[test]
@@ -22,9 +22,10 @@ fn child_cannot_acquire_while_parent_holds() {
         .truncate(false)
         .open(&path)
         .expect("parent open");
-    parent_file
+    let got = parent_file
         .try_lock_exclusive()
-        .expect("parent should acquire");
+        .expect("parent try_lock_exclusive syscall should succeed");
+    assert!(got, "parent should have acquired the exclusive lock");
 
     // Fork. Child opens the same path (fresh fd → fresh OFD) and
     // attempts `try_lock_exclusive`. flock is associated with open
@@ -42,8 +43,9 @@ fn child_cannot_acquire_while_parent_holds() {
             .open(&path)
             .expect("child open");
         let code = match child_file.try_lock_exclusive() {
-            Ok(()) => 1, // unexpected — both held
-            Err(_) => 0, // expected — parent blocks us
+            Ok(true) => 1,  // unexpected — both held
+            Ok(false) => 0, // expected — contention, parent blocks us
+            Err(_) => 2,    // IO error (distinct from "parent holds")
         };
         unsafe {
             libc::_exit(code);
@@ -77,7 +79,8 @@ fn release_on_drop_lets_another_acquire() {
             .truncate(false)
             .open(&path)
             .unwrap();
-        first.try_lock_exclusive().expect("first acquires");
+        let got = first.try_lock_exclusive().expect("first syscall ok");
+        assert!(got, "first should acquire lock");
         // first drops at end of scope → flock released.
     }
 
@@ -88,7 +91,8 @@ fn release_on_drop_lets_another_acquire() {
         .truncate(false)
         .open(&path)
         .unwrap();
-    second
+    let got = second
         .try_lock_exclusive()
-        .expect("second acquires after first dropped");
+        .expect("second syscall ok");
+    assert!(got, "second should acquire after first dropped");
 }

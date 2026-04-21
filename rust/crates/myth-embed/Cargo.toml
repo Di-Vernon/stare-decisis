@@ -22,9 +22,9 @@ anyhow = { workspace = true }
 # docs/04-CRATES/06-myth-embed.md change box 2026-04-19)
 fastembed = { workspace = true }
 
-# Unix syscalls (setsid for daemon detach, flock via fs2)
+# Unix syscalls (setsid for daemon detach, flock via fs4)
 libc = { workspace = true }
-fs2 = { workspace = true }
+fs4 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

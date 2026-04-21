@@ -2,7 +2,7 @@
 //!
 //! Design: open+append+lock+write+flush+drop for each record. This keeps
 //! the writer stateless so different hook binaries can share a file
-//! safely — multiple processes coordinating through `fs2::FileExt`
+//! safely — multiple processes coordinating through `fs4::FileExt`
 //! (backed by `fcntl` flock on Linux).
 
 use std::fs::OpenOptions;
@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use fs2::FileExt;
+use fs4::fs_std::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub struct JsonlWriter {

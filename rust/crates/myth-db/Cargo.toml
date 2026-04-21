@@ -18,7 +18,7 @@ tracing = { workspace = true }
 blake3 = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-fs2 = { workspace = true }
+fs4 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
