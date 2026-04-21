@@ -1,0 +1,67 @@
+# myth Wave 7 — R1-B positive fixtures (20 cases)
+# Rule: find -delete / -exec rm on dangerous paths (Bedrock, Level 5).
+
+rule: R1-B
+expected_level: 5
+category: bedrock
+cases:
+  - id: "01-find_root_delete"
+    input: "find / -type f -delete"
+    note: "find root with -delete"
+  - id: "02-find_root_bare_delete"
+    input: "find / -delete"
+    note: "bare -delete"
+  - id: "03-find_home_delete"
+    input: "find /home -delete"
+    note: "/home tree"
+  - id: "04-find_etc_name_delete"
+    input: 'find /etc -name "*.conf" -delete'
+    note: "find with name filter"
+  - id: "05-find_var_type_delete"
+    input: "find /var -type d -delete"
+    note: "/var directories"
+  - id: "06-find_usr_delete"
+    input: "find /usr -delete"
+    note: "/usr tree"
+  - id: "07-find_opt_delete"
+    input: "find /opt -delete"
+    note: "/opt tree"
+  - id: "08-find_tilde_delete"
+    input: "find ~ -delete"
+    note: "home tilde"
+  - id: "09-find_tilde_docs_delete"
+    input: "find ~/Documents -delete"
+    note: "tilde subpath"
+  - id: "10-find_home_env_delete"
+    input: "find $HOME -delete"
+    note: "HOME env var"
+  - id: "11-find_home_brace_delete"
+    input: "find ${HOME} -delete"
+    note: "braced HOME"
+  - id: "12-find_root_exec_rm"
+    input: 'find / -exec rm {} \;'
+    note: "exec rm at root"
+  - id: "13-find_home_exec_rm_f"
+    input: 'find /home -exec rm -f {} \;'
+    note: "exec rm -f"
+  - id: "14-find_etc_exec_rm_plus"
+    input: "find /etc -exec rm {} +"
+    note: "exec rm with + termination"
+  - id: "15-find_var_exec_rm_rf"
+    input: 'find /var -exec rm -rf {} \;'
+    note: "exec rm -rf cascade"
+  - id: "16-find_bin_exec_rm"
+    input: 'find /bin -exec rm {} \;'
+    note: "/bin tree"
+  - id: "17-find_tilde_exec_rm"
+    input: 'find ~ -exec rm {} \;'
+    note: "tilde + exec rm"
+  - id: "18-find_home_env_exec_rm"
+    input: 'find $HOME -exec rm {} \;'
+    note: "env home + exec rm"
+  - id: "19-find_root_homeuser_delete"
+    input: "find /root -delete"
+    note: "root user home dir"
+  - id: "20-find_srv_delete"
+    input: "find /srv -delete"
+    note: "/srv tree"

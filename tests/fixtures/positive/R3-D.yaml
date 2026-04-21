@@ -1,0 +1,67 @@
+# myth Wave 7 — R3-D positive fixtures (18 cases)
+# Rule: diff-aware auth decorator removal (unified diff context).
+#
+# Match pattern: (?:^|\n)[-]\s*@(login_required|authenticate|...)\b
+# Positive: a line starting with `-` (diff removal) containing @auth_decorator.
+#
+# Multi-line inputs use double-quoted YAML with explicit \n escapes to
+# avoid block-scalar indentation pitfalls.
+
+rule: R3-D
+expected_level: 5
+category: bedrock
+cases:
+  - id: "01-minus_at_login_required"
+    input: "-@login_required"
+    note: "direct removal of @login_required"
+  - id: "02-minus_at_authenticate"
+    input: "-@authenticate"
+    note: "removal of @authenticate"
+  - id: "03-minus_at_require_auth"
+    input: "-@require_auth"
+    note: "removal of @require_auth"
+  - id: "04-minus_at_requires_auth"
+    input: "-@requires_auth"
+    note: "removal of @requires_auth"
+  - id: "05-minus_at_authentication_required"
+    input: "-@authentication_required"
+    note: "removal of @authentication_required"
+  - id: "06-minus_at_require_permissions"
+    input: "-@require_permissions"
+    note: "removal of @require_permissions"
+  - id: "07-minus_at_permission_required"
+    input: "-@permission_required"
+    note: "removal of @permission_required"
+  - id: "08-minus_at_authorize"
+    input: "-@authorize"
+    note: "removal of @authorize"
+  - id: "09-minus_at_require_login"
+    input: "-@require_login"
+    note: "removal of @require_login"
+  - id: "10-minus_spaces_at_login_required"
+    input: "-  @login_required"
+    note: "removal with space indent"
+  - id: "11-minus_tab_at_authenticate"
+    input: "-    @authenticate"
+    note: "removal with 4-space indent"
+  - id: "12-minus_single_space_at_require_auth"
+    input: "- @require_auth"
+    note: "removal with single space"
+  - id: "13-diff_hunk_admin_class"
+    input: "@@ -10,3 +10,2 @@\n class Admin:\n-@login_required\n     def view(self):"
+    note: "unified diff hunk with removed @login_required"
+  - id: "14-diff_admin_authenticate"
+    input: " def admin():\n-@authenticate\n     pass"
+    note: "diff removing @authenticate"
+  - id: "15-diff_double_decorator_removal"
+    input: "-@login_required\n-@permission_required\n def view():"
+    note: "diff removing two auth decorators"
+  - id: "16-diff_route_require_auth"
+    input: " @app.route('/')\n-@require_auth\n def root():"
+    note: "diff removing @require_auth after @app.route"
+  - id: "17-diff_class_authorize"
+    input: " class Resource:\n-@authorize\n     def get(self):"
+    note: "diff removing @authorize from class"
+  - id: "18-diff_indent_require_login"
+    input: " def view():\n-    @require_login\n     return render()"
+    note: "diff with indented @require_login removal"

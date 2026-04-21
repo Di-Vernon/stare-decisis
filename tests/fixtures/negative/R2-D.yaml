@@ -1,0 +1,60 @@
+# myth Wave 7 — R2-D negative fixtures (18 near-miss cases)
+# Rule: Korean/CJK secret labels.
+
+rule_context: R2-D
+expected: no_match
+cases:
+  - id: "01-bimilbeonho_short"
+    input: '비밀번호 = "short"'
+    note: "value too short (needs 16+)"
+  - id: "02-bimilbeonho_empty"
+    input: '비밀번호 = ""'
+    note: "empty value"
+  - id: "03-bimilbeonho_in_prose"
+    input: "사용자는 비밀번호를 입력해야 합니다"
+    note: "Korean prose sentence"
+  - id: "04-amho_function_def"
+    input: "def 암호_생성():"
+    note: "function name with 암호"
+  - id: "05-tokun_comment_only"
+    input: "# 토큰 갱신 플로우 설명"
+    note: "토큰 in prose comment"
+  - id: "06-api_ki_in_heading"
+    input: "## API키 사용법"
+    note: "heading with API키"
+  - id: "07-bimilbeonho_field_label"
+    input: '<label for="pw">비밀번호</label>'
+    note: "HTML label (no value)"
+  - id: "08-sikeuret_english_name"
+    input: '시크릿 = "name_only"'
+    note: "only 9 chars value (needs 16+)"
+  - id: "09-bibeon_variable_ref"
+    input: '비번 = vault.get("password")'
+    note: "function call (no literal)"
+  - id: "10-passwoo_none"
+    input: '패스워드 = None'
+    note: "None literal"
+  - id: "11-amho_env_ref"
+    input: '암호 = os.environ["KEY"]'
+    note: "env var ref"
+  - id: "12-tokun_template"
+    input: "토큰 = {{ env.TOKEN }}"
+    note: "jinja template"
+  - id: "13-injeunggi_placeholder"
+    input: '인증키 = "REPLACE"'
+    note: "7-char placeholder"
+  - id: "14-english_description_only"
+    input: 'description = "Password field is required"'
+    note: "description with password word (not CJK keyword)"
+  - id: "15-bimilbeonho_with_arrow"
+    input: "비밀번호 -> login()"
+    note: "arrow operator (no assignment)"
+  - id: "16-sikeuret_compared"
+    input: "시크릿 == expected"
+    note: "== equality check (not assignment)"
+  - id: "17-bimilbeonho_korean_value"
+    input: '비밀번호 = "매우긴한국어값임XXXX"'
+    note: "Korean value (alphabet mismatch)"
+  - id: "18-random_korean"
+    input: "오늘 날씨가 좋네요"
+    note: "irrelevant Korean text"

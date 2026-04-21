@@ -1,0 +1,61 @@
+# myth Wave 7 — R2-D positive fixtures (18 cases)
+# Rule: Korean/CJK secret labels (비밀번호/암호/토큰/인증키/API키/시크릿/비번/패스워드).
+
+rule: R2-D
+expected_level: 5
+category: bedrock
+cases:
+  - id: "01-bimilbeonho_equals"
+    input: '비밀번호 = "supersecret12345"'
+    note: "비밀번호 with quoted value"
+  - id: "02-bimilbeonho_colon"
+    input: '비밀번호: ReallyLongPass12345'
+    note: "비밀번호 colon YAML"
+  - id: "03-amho_equals"
+    input: '암호 = "ABCDEFGH01234567"'
+    note: "암호 assignment"
+  - id: "04-tokun_equals"
+    input: '토큰 = "ghp_0123456789ABCDEF"'
+    note: "토큰 with github-like value"
+  - id: "05-injeunggi_equals"
+    input: '인증키 = "1234567890abcdef0123"'
+    note: "인증키 (authentication key)"
+  - id: "06-api_ki_equals"
+    input: 'API키 = "genericKeyValue12345"'
+    note: "API키 generic value (no provider prefix to avoid R2-A cross)"
+  - id: "07-sikeuret_equals"
+    input: '시크릿 = "MySecretValue123456"'
+    note: "시크릿 (secret transliteration)"
+  - id: "08-bibeon_equals"
+    input: '비번 = "ShortestAllowedValue"'
+    note: "비번 (casual abbrev of 비밀번호)"
+  - id: "09-passwoo_equals"
+    input: '패스워드 = "PasswordValueABC12"'
+    note: "패스워드 (password transliteration)"
+  - id: "10-bimilbeonho_env"
+    input: "비밀번호=SimpleEnvFormat1234"
+    note: "비밀번호 env-style no spaces"
+  - id: "11-tokun_colon_yaml"
+    input: '토큰: "abcdef0123456789ABCD"'
+    note: "토큰: YAML colon generic value"
+  - id: "12-injeunggi_single_quote"
+    input: "인증키 = 'abcdefghijklmnop1234'"
+    note: "인증키 with single quotes"
+  - id: "13-amho_backtick"
+    input: '암호 = `backtickValue12345`'
+    note: "암호 with backticks"
+  - id: "14-api_ki_in_dict"
+    input: '"API키": "keyvalue1234567890AB"'
+    note: "API키 in JSON dict"
+  - id: "15-bimilbeonho_inline"
+    input: '비밀번호 = "SecretInlineABCD1234"'
+    note: "비밀번호 inline assignment"
+  - id: "16-tokun_comment_context"
+    input: '# 서버 토큰 = "abcdefghij012345"'
+    note: "토큰 in comment with assignment"
+  - id: "17-sikeuret_function_val"
+    input: '시크릿 = "aB3DeF5GhIjKlMn0PqRs"'
+    note: "시크릿 base64-like value"
+  - id: "18-bibeon_with_spaces"
+    input: '비번 : "spacedcolonvalue1234"'
+    note: "비번 with spaced colon"

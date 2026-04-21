@@ -1,0 +1,70 @@
+# myth Wave 7 — R2-C positive fixtures (20 cases)
+# Rule: keyword+entropy (detect-secrets Apache-2.0 approach).
+#
+# Triggers when a secret-keyword (password/secret/api_key/token/...) is
+# assigned to a value of length 20+ using the [A-Za-z0-9+/=_-] alphabet.
+
+rule: R2-C
+expected_level: 5
+category: bedrock
+cases:
+  - id: "01-password_equals_quoted"
+    input: 'password = "supersecretvalue12345"'
+    note: "password = quoted 20+"
+  - id: "02-api_key_equals_quoted"
+    input: 'api_key = "abcdefghij1234567890KL"'
+    note: "api_key = quoted 22 chars"
+  - id: "03-passwd_colon_quoted"
+    input: 'passwd: "p4ssw0rd1234567890ABCD"'
+    note: "passwd: quoted value"
+  - id: "04-secret_equals_yaml"
+    input: 'secret: MySecretValue1234567890ABCD'
+    note: "secret: yaml unquoted"
+  - id: "05-token_env_assignment"
+    input: 'TOKEN=0123456789abcdefghij012345'
+    note: "shell env TOKEN="
+  - id: "06-access_token_equals"
+    input: 'access_token = "ghp_1234567890abcdefghijkABCD"'
+    note: "access_token quoted (GitHub-like)"
+  - id: "07-private_key_equals"
+    input: "private_key = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC'"
+    note: "private_key = quoted"
+  - id: "08-client_secret_json"
+    input: '"client_secret": "abcdef0123456789ABCDEFghij"'
+    note: "JSON client_secret"
+  - id: "09-credentials_equals"
+    input: 'credentials = "YWRtaW46cGFzc3dvcmQxMjM0"'
+    note: "base64-like credentials"
+  - id: "10-credential_singular"
+    input: 'credential = "x0Y3J6UGFzc3dvcmQxMjM0NTY="'
+    note: "credential (singular) base64"
+  - id: "11-auth_token_caps"
+    input: 'AUTH_TOKEN = "abcdef1234567890ABCDEFghij"'
+    note: "AUTH_TOKEN uppercase var"
+  - id: "12-password_caps_env"
+    input: "PASSWORD=ReallyLongPassword1234567890"
+    note: "PASSWORD caps env"
+  - id: "13-api_hyphen_key"
+    input: 'api-key: "0123456789abcdefghij01"'
+    note: "api-key (hyphenated)"
+  - id: "14-apikey_no_separator"
+    input: 'apikey = "zZyYxXwWvVuUtTsSrRqQpPoO"'
+    note: "apikey (no separator)"
+  - id: "15-password_equals_single_quoted"
+    input: "password = 'supersecretvalue12345'"
+    note: "password with single quotes"
+  - id: "16-password_case_mixed"
+    input: 'Password = "MixedCase1234567890ABCD"'
+    note: "Password mixed case keyword"
+  - id: "17-secret_in_toml"
+    input: 'secret = "abcdef012345GHIJKL6789"'
+    note: "secret in TOML-like config"
+  - id: "18-token_in_dockerfile"
+    input: "ENV TOKEN=ABCDEFGHIJ0123456789KL"
+    note: "Dockerfile ENV TOKEN"
+  - id: "19-private_key_backtick"
+    input: 'private_key = `MIIEvQIBADANBgkqhkiG9w0B`'
+    note: "private_key with backtick"
+  - id: "20-client_secret_longer"
+    input: 'client_secret: "verylongsecretwithbase64==padding"'
+    note: "client_secret with base64 padding"

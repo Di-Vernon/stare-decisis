@@ -1,0 +1,66 @@
+# myth Wave 7 — R1-B negative fixtures (20 near-miss cases)
+# Rule: find -delete / -exec rm on dangerous paths (Bedrock, Level 5).
+
+rule_context: R1-B
+expected: no_match
+cases:
+  - id: "01-find_tmp_delete"
+    input: "find /tmp -delete"
+    note: "/tmp sandbox-safe"
+  - id: "02-find_tmp_scratch_delete"
+    input: "find /tmp/scratch -delete"
+    note: "tmp subdir"
+  - id: "03-find_dot_delete"
+    input: "find . -delete"
+    note: "relative cwd"
+  - id: "04-find_build_delete"
+    input: "find ./build -delete"
+    note: "relative build dir"
+  - id: "05-find_tmp_exec_rm"
+    input: 'find /tmp -exec rm {} \;'
+    note: "tmp + exec rm (safe)"
+  - id: "06-find_dot_tmp_delete"
+    input: 'find . -name "*.tmp" -delete'
+    note: "relative tmp file cleanup"
+  - id: "07-find_no_path_delete"
+    input: 'find -name "*.log" -delete'
+    note: "no path (implicit cwd)"
+  - id: "08-find_root_name_no_delete"
+    input: 'find / -name "*.tmp"'
+    note: "no delete/exec rm action"
+  - id: "09-find_home_print"
+    input: "find /home -type f -print"
+    note: "print not delete"
+  - id: "10-find_etc_ls"
+    input: "find /etc -ls"
+    note: "ls action only"
+  - id: "11-find_var_mtime_no_action"
+    input: "find /var -mtime +30"
+    note: "no terminal action"
+  - id: "12-find_build_o_delete"
+    input: 'find build/ -name "*.o" -delete'
+    note: "relative build artifacts"
+  - id: "13-find_tmpdir_env_delete"
+    input: "find $TMPDIR -delete"
+    note: "TMPDIR env var (non-sentinel)"
+  - id: "14-find_cache_env_delete"
+    input: "find $CACHE -delete"
+    note: "CACHE env var (non-sentinel)"
+  - id: "15-find_tmp_mmin_delete"
+    input: "find /tmp -mmin -60 -delete"
+    note: "tmp with mtime filter"
+  - id: "16-find_node_modules_delete"
+    input: "find ./node_modules -delete"
+    note: "relative npm deps"
+  - id: "17-find_target_type_delete"
+    input: "find ./target -type d -delete"
+    note: "relative cargo target"
+  - id: "18-find_git_objects_delete"
+    input: "find ./.git/objects -mtime +30 -delete"
+    note: "relative git prune"
+  - id: "19-grep_not_find"
+    input: 'grep -r "foo" /'
+    note: "grep, not find"
+  - id: "20-find_tmp_exec_echo"
+    input: 'find /tmp -exec echo {} \;'
+    note: "exec echo (not rm)"

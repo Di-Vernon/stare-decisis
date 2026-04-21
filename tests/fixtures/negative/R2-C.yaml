@@ -1,0 +1,66 @@
+# myth Wave 7 — R2-C negative fixtures (20 near-miss cases)
+# Rule: keyword+entropy (detect-secrets Apache-2.0 approach).
+
+rule_context: R2-C
+expected: no_match
+cases:
+  - id: "01-password_short"
+    input: 'password = "short"'
+    note: "only 5 chars (needs 20+)"
+  - id: "02-password_empty"
+    input: 'password = ""'
+    note: "empty password"
+  - id: "03-password_none"
+    input: 'password = None'
+    note: "None literal"
+  - id: "04-password_null"
+    input: 'password: null'
+    note: "null literal"
+  - id: "05-password_undefined"
+    input: 'password = undefined'
+    note: "undefined literal"
+  - id: "06-password_variable_ref"
+    input: 'password = config.secrets.password'
+    note: "attribute access (no literal value)"
+  - id: "07-api_key_env_ref"
+    input: 'api_key = os.environ["API_KEY"]'
+    note: "env var ref (no literal)"
+  - id: "08-password_length_check"
+    input: 'password_length = len(vault.get("pwd"))'
+    note: "password_length (suffix breaks keyword word boundary)"
+  - id: "09-password_placeholder_word"
+    input: 'password = "REPLACE_ME"'
+    note: "placeholder (only 10 chars)"
+  - id: "10-password_in_template"
+    input: "password = {{ vault.password }}"
+    note: "jinja template placeholder"
+  - id: "11-password_in_comment"
+    input: "# Use password reset flow for auth"
+    note: "password keyword in prose comment"
+  - id: "12-secret_function_name"
+    input: "def get_secret_value():"
+    note: "function definition with 'secret'"
+  - id: "13-token_parameter_name"
+    input: "def refresh_token(token: str) -> str:"
+    note: "parameter name is 'token'"
+  - id: "14-password_in_sentence"
+    input: "User must enter their password to continue"
+    note: "english prose"
+  - id: "15-api_key_config_path"
+    input: "api_key_config_path = '/etc/myapp/config'"
+    note: "key is 'api_key_config_path' not 'api_key'"
+  - id: "16-password_less_than_20"
+    input: 'password = "ShortButOver15!!"'
+    note: "16 chars (under 20)"
+  - id: "17-password_special_chars"
+    input: 'password = "!!@#$%^&*()!!@#$%^&*"'
+    note: "special chars only (alphabet mismatch)"
+  - id: "18-password_korean"
+    input: 'password = "비밀번호임필드"'
+    note: "Korean content (alphabet mismatch)"
+  - id: "19-password_emoji"
+    input: 'password = "🔐🔑🔓🔒🔐🔑🔓🔒🔐🔑"'
+    note: "emoji only"
+  - id: "20-password_spaces"
+    input: 'password = "correct horse battery staple"'
+    note: "passphrase with spaces (alphabet mismatch)"
