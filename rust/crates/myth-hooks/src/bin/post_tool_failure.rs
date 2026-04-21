@@ -29,8 +29,9 @@ use myth_db::events::{HookEventType, Verdict as DbVerdict};
 use myth_db::{Database, JsonlWriter, Lesson, LessonStatus, LessonStore, SqliteLessonStore};
 use myth_hooks::core::session::parse_claude_session_id;
 use myth_hooks::{
-    classify_tier0, records, run_hook, templates, DeterministicClassification, HookOutcome,
-    HookPayload, HookResult, PartialHookEvent, PostToolUseFailureData,
+    classify_tier0, maybe_tier3_dispatch, records, run_hook, templates, tier3_gate_active,
+    DeterministicClassification, HookOutcome, HookPayload, HookResult, PartialHookEvent,
+    PostToolUseFailureData,
 };
 use myth_identity::{normalize_aggressive, tier1_hash};
 use serde_json::json;
@@ -81,6 +82,23 @@ fn main() -> ExitCode {
 
                 if let Err(e) = record_tier1(session_id_str, data, reminder_id) {
                     tracing::warn!(error = %e, "Tier 1 record failed (observability-only)");
+                }
+
+                // Tier 3 gate (Wave 8 Task 8.3, carry-forward #3).
+                // Day-1: tier3_gate_active() returns false, so the
+                // dispatch never fires. Milestone A flips the gate
+                // when Tier 1 compliance drops below Decision 3's
+                // 70% threshold — at that point `python3 -m
+                // myth_py.assessor.cli classify` is spawned with
+                // the failure envelope. Errors here are strictly
+                // observability — the hook result is unaffected.
+                if tier3_gate_active() {
+                    if let Err(e) = maybe_tier3_dispatch(session_id_str, data) {
+                        tracing::warn!(
+                            error = %e,
+                            "Tier 3 dispatch failed (observability-only)"
+                        );
+                    }
                 }
 
                 let json_out = json!({

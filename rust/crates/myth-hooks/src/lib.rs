@@ -11,6 +11,7 @@ pub mod core;
 pub mod records;
 pub mod templates;
 pub mod tier0;
+pub mod tier3_dispatch;
 
 pub use core::input::{
     parse_envelope, read_envelope_from_stdin, HookCommon, HookEnvelope, HookEventName,
@@ -22,3 +23,4 @@ pub use core::output::{HookOutcome, HookResult, PartialHookEvent};
 pub use core::runner::run_hook;
 pub use core::session::parse_claude_session_id;
 pub use tier0::{classify as classify_tier0, DeterministicClassification};
+pub use tier3_dispatch::{maybe_tier3_dispatch, tier3_gate_active};
