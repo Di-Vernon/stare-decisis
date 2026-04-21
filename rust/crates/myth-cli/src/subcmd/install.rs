@@ -57,6 +57,7 @@ pub async fn run(args: InstallArgs) -> Result<ExitCode> {
 
     copy_templates(&repo_root)?;
     init_myth_home()?;
+    install_python_package(&repo_root);
 
     if !std::env::var("PATH")
         .unwrap_or_default()
@@ -188,6 +189,89 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Wave 8 Task 8.2 — best-effort auto-install of the Python package.
+///
+/// Prefers `uv pip` (fast, reproducible) over bare `pip` / `pip3`.
+/// On any failure (tool missing, install error, missing python dir)
+/// prints a warning with the exact manual command and returns
+/// without propagating — the Rust-side install still succeeds so
+/// users don't lose the symlinked binaries over a Python hiccup.
+fn install_python_package(repo_root: &Path) {
+    let python_dir = repo_root.join("python");
+    if !python_dir.exists() {
+        eprintln!(
+            "warning: python package dir {} not found, skipping Python install",
+            python_dir.display()
+        );
+        return;
+    }
+
+    let (installer, args): (&str, Vec<&str>) = if which_exists("uv") {
+        ("uv", vec!["pip", "install", "-e", ".[dev]"])
+    } else if which_exists("pip3") {
+        ("pip3", vec!["install", "-e", ".[dev]"])
+    } else if which_exists("pip") {
+        ("pip", vec!["install", "-e", ".[dev]"])
+    } else {
+        eprintln!();
+        eprintln!("warning: neither `uv` nor `pip`/`pip3` found on PATH");
+        eprintln!("  To install myth-py manually:");
+        eprintln!(
+            "    cd {} && uv pip install -e \".[dev]\"",
+            python_dir.display()
+        );
+        return;
+    };
+
+    println!("installing Python package with {}...", installer);
+    let status = std::process::Command::new(installer)
+        .args(&args)
+        .current_dir(&python_dir)
+        .status();
+
+    match status {
+        Ok(st) if st.success() => {
+            println!("Python package installed: myth_py (editable, with dev extras)");
+        }
+        Ok(st) => {
+            eprintln!();
+            eprintln!(
+                "warning: {} exited with status {} — Python install failed",
+                installer,
+                st.code().unwrap_or(-1)
+            );
+            eprintln!(
+                "  Retry manually: cd {} && {} {}",
+                python_dir.display(),
+                installer,
+                args.join(" ")
+            );
+        }
+        Err(e) => {
+            eprintln!();
+            eprintln!("warning: failed to spawn {}: {}", installer, e);
+            eprintln!(
+                "  Install manually: cd {} && {} {}",
+                python_dir.display(),
+                installer,
+                args.join(" ")
+            );
+        }
+    }
+}
+
+/// Cheap `which`-equivalent. Returns true iff `name` resolves on
+/// PATH. Uses `sh -c command -v` so it works across shells and
+/// avoids pulling in a dependency.
+fn which_exists(name: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("command -v {} > /dev/null 2>&1", name))
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 fn init_myth_home() -> Result<()> {
     let home = myth_common::myth_home();
     std::fs::create_dir_all(&home)?;
@@ -245,5 +329,16 @@ mod tests {
     #[test]
     fn binaries_count() {
         assert_eq!(BINARIES.len(), 8);
+    }
+
+    #[test]
+    fn which_exists_resolves_sh() {
+        // `sh` exists on every POSIX system myth targets.
+        assert!(which_exists("sh"));
+    }
+
+    #[test]
+    fn which_exists_rejects_bogus() {
+        assert!(!which_exists("definitely_not_a_real_binary_xyzzy_9999"));
     }
 }
