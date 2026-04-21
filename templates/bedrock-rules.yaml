@@ -1,4 +1,160 @@
-# placeholder — populated in Wave 7.
-# See DECISIONS.md Decision 5, docs/04-CRATES/03-myth-gavel.md, THIRD-PARTY.md.
+# myth — Bedrock Rule 정규식 카탈로그 (Wave 7)
+#
+# 참조:
+#   - CONSTITUTION.md Article 7 §Bedrock Rule (정확히 3개 아이템)
+#   - DECISIONS.md Decision 5 (47 패턴 Day-1 도입, gitleaks MIT 차용)
+#   - THIRD-PARTY.md §1-2 (gitleaks/detect-secrets 출처 귀속)
+#   - docs/04-CRATES/03-myth-gavel.md (YAML schema: items → rules)
+#
+# Fail-safe: 파싱 실패 또는 regex 컴파일 실패 시 Gavel::init이 에러를 반환,
+#            호출자는 deny-by-default로 처리한다 (lib.rs §top-level doc).
+#
+# 매칭 정책: 모든 Bedrock 매칭은 Grid 우회, 항상 Enforcement::Seal (continue=false).
+#
+# 보안 주의: positive/negative test string은 전부 synthetic. 실존 credential·PII
+#            금지 (fixture 작성 시 Task 7.2/7.3 참조).
+
 version: 1
-items: []
+
+items:
+  # ───────────────────────────────────────────────────────────────────
+  # Item 1: Unsandboxed rm -rf on production / system / user home paths
+  #
+  # rationale: 완전 비가역 + 광범위 피해 + 구조적 필수성 (Article 7).
+  # 타겟 경로: /, /bin, /boot, /etc, /home, /lib, /opt, /root, /sbin,
+  #            /srv, /sys, /usr, /var, ~, $HOME, ${HOME}.
+  # ───────────────────────────────────────────────────────────────────
+  - id: rm_rf_unsandboxed
+    description: "Unsandboxed rm -rf on production or user home"
+    rules:
+      # R1-A: rm -rf 플래그 순열 (rf/fr/Rf/fR/혼합 + sudo/doas + 장문 옵션)
+      # env-sentinel ($HOME/$PWD 등)는 R1-G가 전담 (중첩 방지).
+      - id: R1-A
+        pattern: '\brm\s+(?:-[a-zA-Z]*[rR][a-zA-Z]*[fF][a-zA-Z]*|-[a-zA-Z]*[fF][a-zA-Z]*[rR][a-zA-Z]*|--recursive\s+--force|--force\s+--recursive)\s+(?:-[a-zA-Z]+\s+)*(?:/\s*$|/(?:bin|boot|etc|home|lib|opt|root|sbin|srv|sys|usr|var)\b|/\*|~(?:\s|/|$))'
+        level: 5
+        likelihood: HIGH
+        source: "gitleaks v8.x (MIT) + myth Research #5"
+
+      # R1-B: find -delete / -exec rm on dangerous paths
+      - id: R1-B
+        pattern: '\bfind\s+(?:/\s|/(?:bin|boot|etc|home|lib|opt|root|sbin|srv|sys|usr|var)\b|~(?:\s|/)|\$\{?HOME\}?\b)[^|;&]*(?:-delete\b|-exec\s+rm\b)'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+      # R1-C: language APIs (rmtree/rmSync/removedirs) targeting danger
+      # env-sentinel은 R1-G가 전담 (중첩 방지).
+      - id: R1-C
+        pattern: '(?:shutil\.rmtree|os\.rmdir|os\.removedirs|fs\.rm(?:dir)?Sync|fs\.promises\.rm|pathlib\.Path[^)]*\.rmdir)\s*\(\s*[''"`]?(?:/(?:bin|boot|etc|home|lib|opt|root|sbin|srv|sys|usr|var)\b|/\s*[''"`]|~(?:/|[''"`]))'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+      # R1-D: git destructive (reset --hard main, push --force main, clean -fdx/-dxf)
+      - id: R1-D
+        pattern: '\bgit\s+(?:reset\s+--hard\s+(?:HEAD~[0-9]+|origin/(?:main|master|release|production)|upstream/(?:main|master))|push\s+(?:--force(?:-with-lease)?|-f)\s+[^\n]*\b(?:main|master|release|production)\b|clean\s+-(?:[a-zA-Z]*[fF][a-zA-Z]*[dDxX][a-zA-Z]*|[a-zA-Z]*[dDxX][a-zA-Z]*[fF][a-zA-Z]*))'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+      # R1-E: other verbs (dd/mkfs on block devices, chmod -R on /)
+      - id: R1-E
+        pattern: '(?:\bdd\s+[^|;&\n]*of=/dev/(?:[sh]d[a-z]|nvme[0-9]n[0-9]|mmcblk[0-9]|vd[a-z])|\bmkfs\.[a-z0-9]+\s+/dev/(?:[sh]d[a-z]|nvme[0-9]n[0-9]|mmcblk[0-9]|vd[a-z])|\bchmod\s+-R\s+[0-9]+\s+/\s*(?:$|\s))'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+      # R1-F: docker/k8s cluster-scoped destructive operations
+      - id: R1-F
+        pattern: '(?:\bdocker\s+(?:system\s+prune\s+-a|volume\s+prune\s+-[a-zA-Z]*f|rm\s+-f\s+\$\(docker\s+ps)|\bkubectl\s+delete\s+(?:ns|namespace)\s+(?:default|kube-system|kube-public|kube-node-lease))'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+      # R1-G: env-path sentinel (rm -rf $HOME / $PROJECT_ROOT 등)
+      - id: R1-G
+        pattern: '(?:\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*[fF][a-zA-Z]*|\brm\s+-[a-zA-Z]*[fF][a-zA-Z]*[rR][a-zA-Z]*|\bshutil\.rmtree\s*\(|\bfs\.rmSync\s*\()\s*[''"]?\$\{?(?:HOME|PWD|PROJECT_ROOT|CLAUDE_PROJECT_DIR|OLDPWD)\}?\b'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5"
+
+  # ───────────────────────────────────────────────────────────────────
+  # Item 2: Production secrets committed to repository
+  #
+  # rationale: 외부 노출 비가역 + 크레덴셜 회전 비용 + 보안 기본 (Article 7).
+  # 차용: gitleaks v8.x anchored prefixes (R2-A), detect-secrets 접근 (R2-C).
+  # ───────────────────────────────────────────────────────────────────
+  - id: production_secrets_commit
+    description: "Production secrets/keys/tokens committed"
+    rules:
+      # R2-A: 40개 provider anchored prefix 병합 regex (gitleaks v8.x MIT)
+      #
+      # 제공자 커버: AWS (7) + GitHub (6) + Slack (5) + Stripe (3) + SendGrid (1)
+      #            + Google (2) + GitLab (1) + DigitalOcean (1) + PyPI (1)
+      #            + npm (1) + Shopify (4) + Mailgun (1) + Twilio (2) + Dropbox (1)
+      #            + Square (2) + Anthropic (1) + OpenAI (1) = 40
+      - id: R2-A
+        pattern: '\b(?:AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AGPA[0-9A-Z]{16}|AIDA[0-9A-Z]{16}|AROA[0-9A-Z]{16}|ANPA[0-9A-Z]{16}|ANVA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|gho_[A-Za-z0-9]{36}|ghs_[A-Za-z0-9]{36}|ghu_[A-Za-z0-9]{36}|ghr_[A-Za-z0-9]{36}|xoxb-[A-Za-z0-9-]{10,}|xoxp-[A-Za-z0-9-]{10,}|xoxa-[A-Za-z0-9-]{10,}|xoxr-[A-Za-z0-9-]{10,}|xoxs-[A-Za-z0-9-]{10,}|sk_live_[A-Za-z0-9]{24,}|pk_live_[A-Za-z0-9]{24,}|rk_live_[A-Za-z0-9]{24,}|SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}|AIza[0-9A-Za-z_\-]{35}|ya29\.[0-9A-Za-z_\-]{68,}|glpat-[A-Za-z0-9_\-]{20}|dop_v1_[a-f0-9]{64}|pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_\-]{30,}|npm_[A-Za-z0-9]{36}|shpat_[a-f0-9]{32}|shpss_[a-f0-9]{32}|shpca_[a-f0-9]{32}|shppa_[a-f0-9]{32}|key-[a-f0-9]{32}|SK[a-f0-9]{32}|AC[a-f0-9]{32}|sl\.[A-Za-z0-9_\-]{100,}|sq0idp-[A-Za-z0-9_\-]{22}|sq0csp-[A-Za-z0-9_\-]{43}|sk-ant-api[0-9]{2}-[A-Za-z0-9_\-]{93}-[A-Za-z0-9]{6}|sk-[A-Za-z0-9]{48})\b'
+        level: 5
+        likelihood: HIGH
+        source: "gitleaks v8.x (MIT) - 40 anchored provider prefixes"
+
+      # R2-B: PEM private key block + URL basic-auth (password in URL)
+      # URL schemes 커버: https?, ftps?, postgres(ql)?, mysql, redis(s)?,
+      #                   mongodb(+srv)?, amqps? (DB 연결 문자열 커버)
+      - id: R2-B
+        pattern: '(?:-----BEGIN\s+(?:RSA|DSA|EC|OPENSSH|PGP)\s+PRIVATE\s+KEY-----|(?:https?|ftps?|postgres(?:ql)?|mysql|redis(?:s)?|mongodb(?:\+srv)?|amqps?)://[^\s:@/]+:[^\s@/]{8,}@[^\s/]+)'
+        level: 5
+        likelihood: HIGH
+        source: "gitleaks v8.x (MIT) - PEM block + URL basic-auth"
+
+      # R2-C: keyword + entropy (detect-secrets KeywordDetector 개념 차용)
+      # 키워드에 bare `token` 추가 + 키워드 양쪽 optional quote (JSON/YAML 커버).
+      - id: R2-C
+        pattern: '(?i)[''"]?\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|credentials?|token)\b[''"]?\s*[:=]\s*[''"`]?([A-Za-z0-9+/=_\-]{20,})[''"`]?'
+        level: 5
+        likelihood: MEDIUM
+        source: "detect-secrets (Apache-2.0) - keyword+entropy approach"
+
+      # R2-D: 한국어/CJK secret label (JSON/YAML quote wrapper 허용)
+      - id: R2-D
+        pattern: '[''"]?(?:비밀번호|암호|토큰|인증키|API키|시크릿|비번|패스워드)[''"]?\s*[:=]\s*[''"`]?([A-Za-z0-9+/=_\-]{16,})[''"`]?'
+        level: 5
+        likelihood: MEDIUM
+        source: "myth Research #5 - CJK secret labels"
+
+  # ───────────────────────────────────────────────────────────────────
+  # Item 3: Authentication / authorization bypass in production
+  #
+  # rationale: 시스템 신뢰 경계 훼손 + 감사 불가 (Article 7).
+  # ───────────────────────────────────────────────────────────────────
+  - id: auth_bypass_production
+    description: "Auth/authz bypass in production context"
+    rules:
+      # R3-A: TLS/JWT verify 우회 (verify=False 등, JSON/YAML quote wrapper 허용)
+      - id: R3-A
+        pattern: '(?:[''"]?\bverify\b[''"]?\s*[:=]\s*[''"]?(?:False|false)\b|\bSSL_VERIFY\s*[=:]\s*(?:0|false|False)\b|\binsecure_skip_verify\s*[:=]\s*true\b|\bInsecureSkipVerify\s*:\s*true\b|\bVerifyMode\s*=\s*CERT_NONE\b|\bssl\._create_unverified_context\b|\bjwt(?:\.verify)?\s*\([^)]*verify\s*[:=]\s*(?:False|false|null))'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5 - TLS/JWT verify bypass"
+
+      # R3-B: framework decorator bypass (CSRF/auth 스킵)
+      - id: R3-B
+        pattern: '(?:@csrf_exempt\b|@never_cache\b|@login_not_required\b|\bskip_before_action\s+:authenticate|\bAUTHENTICATION_BACKENDS\s*=\s*\[\s*\]|\bpermission_classes\s*=\s*\[\s*(?:AllowAny|\])|\bauthentication_classes\s*=\s*\[\s*\])'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5 - framework auth decorators"
+
+      # R3-C: env-based auth disable (DISABLE_AUTH=true 등, 값 case-insensitive)
+      - id: R3-C
+        pattern: '\b(?:DISABLE_AUTH|SKIP_AUTH|BYPASS_AUTH|NO_AUTH|AUTH_DISABLED|DEBUG_NO_AUTH|ALLOW_ANONYMOUS|DEV_NO_AUTH)\b\s*[=:]\s*[''"`]?(?i:true|1|yes|on|enabled)[''"`]?'
+        level: 5
+        likelihood: HIGH
+        source: "myth Research #5 - env-based auth disable"
+
+      # R3-D: diff-aware auth decorator 제거 감지 (multiline unified diff)
+      - id: R3-D
+        pattern: '(?:^|\n)[-]\s*@(?:login_required|authenticate|require_auth|requires_auth|authentication_required|require_permissions|permission_required|authorize|require_login)\b'
+        level: 5
+        likelihood: MEDIUM
+        source: "myth Research #5 - diff-aware decorator removal"

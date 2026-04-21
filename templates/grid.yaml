@@ -1,4 +1,66 @@
-# placeholder — populated in Wave 7.
-# See docs/09-CLAUDE-PROMPTS.md §Task 7.3 (Grid YAML).
+# myth — Sentencing Grid (Wave 7)
+#
+# Level × Recurrence → Enforcement 매트릭스 (30셀 = 5×6).
+#
+# 참조:
+#   - docs/04-CRATES/03-myth-gavel.md §Grid (default matrix 원본)
+#   - rust/crates/myth-gavel/src/grid/default.rs (DEFAULT_MATRIX 상수)
+#   - docs/09-CLAUDE-PROMPTS.md §Task 7.3
+#
+# ⚠️  Wave 7 drift notice:
+#     현재 런타임은 이 YAML을 읽지 않는다. Grid::load()는 DEFAULT_MATRIX
+#     상수 + state.db의 grid_overrides 테이블만 참조한다. 이 파일은 install.rs가
+#     ~/.myth/grid.yaml로 복사만 하며, 사용자에게 default matrix를 투명하게
+#     문서화하는 용도다. YAML 편집만으로는 enforcement가 변하지 않으며,
+#     변경하려면 grid_overrides 테이블을 수정해야 한다.
+#     런타임 로드 연결은 Milestone C 또는 별도 wave scope.
+#
+# Bedrock 매칭은 이 매트릭스를 우회하고 항상 Seal.
+# Foundation/Surface만 이 매트릭스를 통과한다.
+
 version: 1
-matrix: {}
+
+matrix:
+  # Format: "Level-Recurrence": enforcement
+  # Level: 1 (Info) .. 5 (Critical)
+  # Recurrence: I (first) .. VI (chronic 10+회)
+
+  # L1 — Info
+  "1-I": dismiss
+  "1-II": dismiss
+  "1-III": note
+  "1-IV": note
+  "1-V": advisory
+  "1-VI": advisory
+
+  # L2 — Low
+  "2-I": note
+  "2-II": note
+  "2-III": advisory
+  "2-IV": advisory
+  "2-V": caution
+  "2-VI": caution
+
+  # L3 — Medium
+  "3-I": advisory
+  "3-II": caution
+  "3-III": caution
+  "3-IV": warn
+  "3-V": warn
+  "3-VI": warn
+
+  # L4 — High
+  "4-I": caution
+  "4-II": warn
+  "4-III": warn
+  "4-IV": strike
+  "4-V": strike
+  "4-VI": strike
+
+  # L5 — Critical (Foundation 매칭만. Bedrock은 매트릭스 우회 Seal)
+  "5-I": strike
+  "5-II": strike
+  "5-III": strike
+  "5-IV": strike
+  "5-V": strike
+  "5-VI": strike

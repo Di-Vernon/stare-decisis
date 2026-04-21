@@ -1,4 +1,77 @@
-# placeholder — populated in Wave 7.
-# See CONSTITUTION.md Article 7 §Foundation Rule.
+# myth — Foundation Rule 정규식 카탈로그 (Wave 7)
+#
+# 참조:
+#   - CONSTITUTION.md Article 7 §Foundation Rule (Round 2a seed 5개)
+#   - docs/09-CLAUDE-PROMPTS.md Task 7.2 (예시 패턴)
+#
+# Foundation Rule은 Bedrock과 달리 Grid를 통과한다. Level × Recurrence →
+# Enforcement 매핑으로 판정 (default: L4×I=Caution, L4×IV=Strike, 등).
+#
+# Fail-safe: 파싱/컴파일 실패 시 Gavel::init 에러 → deny-by-default.
+#
+# 보안 주의: fixture는 synthetic only. 실존 credential·PII 금지.
+
 version: 1
-items: []
+
+items:
+  # ───────────────────────────────────────────────────────────────────
+  # F1: main/release 브랜치에 --force push
+  # ───────────────────────────────────────────────────────────────────
+  - id: main_force_push
+    description: "--force push to main/master/release branches"
+    rules:
+      - id: F1-A
+        pattern: '\bgit\s+push\s+(?:--force(?:-with-lease)?|-f)\b[^\n]*\b(?:main|master|release|production|prod)\b'
+        level: 4
+        likelihood: HIGH
+        source: "myth Article 7 Foundation seed"
+
+  # ───────────────────────────────────────────────────────────────────
+  # F2: 보호된 브랜치에서 --no-verify로 CI/CD 우회
+  # ───────────────────────────────────────────────────────────────────
+  - id: no_verify_ci_bypass
+    description: "--no-verify on commit/push (CI/CD bypass)"
+    rules:
+      - id: F2-A
+        pattern: '\bgit\s+(?:commit|push|merge|rebase|am)\b[^\n]*\s--no-verify\b'
+        level: 4
+        likelihood: HIGH
+        source: "myth Article 7 Foundation seed"
+
+  # ───────────────────────────────────────────────────────────────────
+  # F3: PII/secret exfiltration (log·metric·외부 서비스로 유출)
+  # ───────────────────────────────────────────────────────────────────
+  - id: pii_exfiltration
+    description: "PII/secret exfiltration to logs/metrics/external sinks"
+    rules:
+      # log/print/send에 secret 키워드가 값으로 박혀 전송되는 패턴
+      - id: F3-A
+        pattern: '(?i)(?:logger?\.(?:info|warn|error|debug)|print|console\.(?:log|info|warn|error)|send(?:_metric|_event|_alert)?|requests\.(?:post|put)|fetch\s*\(|axios\.(?:post|put))\s*\([^)]*\b(?:password|secret|api[_-]?key|token|credit[_-]?card|ssn|social[_-]?security|private[_-]?key)\b[^)]*\)'
+        level: 4
+        likelihood: MEDIUM
+        source: "myth Article 7 Foundation seed"
+
+  # ───────────────────────────────────────────────────────────────────
+  # F4: 신뢰 경계에 미검증 의존성 설치 (curl | sh 패턴)
+  # ───────────────────────────────────────────────────────────────────
+  - id: unverified_dependency
+    description: "Install unverified dependency (curl | sh, pipe to bash)"
+    rules:
+      - id: F4-A
+        pattern: '(?:\bcurl\s+[^|;&\n]*\s+(?:-fsSL|-sSL|-L|-s)[^|;&\n]*|\bwget\s+-[a-zA-Z]*O-\s+[^|;&\n]+)\s*\|\s*(?:sudo\s+)?(?:bash|sh|zsh|fish)\b'
+        level: 4
+        likelihood: HIGH
+        source: "myth Article 7 Foundation seed"
+
+  # ───────────────────────────────────────────────────────────────────
+  # F5: 권한 있는 context에서 untrusted 소스의 임의 코드 실행
+  # ───────────────────────────────────────────────────────────────────
+  - id: untrusted_arbitrary_execution
+    description: "Arbitrary code exec from untrusted source (eval/exec)"
+    rules:
+      # eval/exec/Function에 외부 입력(request/input/argv)이 바로 들어가는 패턴
+      - id: F5-A
+        pattern: '(?:\beval\s*\(\s*(?:request\.|input\s*\(|sys\.argv|process\.argv|os\.environ|req\.body)|\bexec\s*\(\s*(?:request\.|input\s*\(|sys\.argv|process\.argv|req\.body)|\bnew\s+Function\s*\([^)]*(?:req\.body|request\.|process\.argv)|\bos\.system\s*\(\s*(?:request\.|input\s*\(|sys\.argv))'
+        level: 3
+        likelihood: MEDIUM
+        source: "myth Article 7 Foundation seed"
