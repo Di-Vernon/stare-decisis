@@ -24,6 +24,9 @@ regex = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# Task 7.6 — Tier 0 concurrent write test reads state.db to verify
+# hook_events row count after N=8 subprocess invocations.
+rusqlite = { workspace = true }
 
 # Task 3.2 — simple 3 bins (session-start, user-prompt, stop).
 [[bin]]

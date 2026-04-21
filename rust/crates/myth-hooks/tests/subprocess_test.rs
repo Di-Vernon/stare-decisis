@@ -16,15 +16,12 @@
 //!   exactly N well-formed lines with no byte interleaving and no
 //!   duplicated / dropped records.
 //!
-//! Known coverage gap — Tier 0 concurrent write path: this test
-//! covers only Tier 1 (no DB touch). The Tier 0 deterministic path
-//! additionally writes to `state.db` via SQLite (WAL mode,
-//! `busy_timeout=5000ms` — see `crates/myth-db/src/sqlite/pragmas.rs`).
-//! SQLite's own writer serialisation is presumed correct by design
-//! but is not exercised here. Revisit during Wave 6 / Wave 7
-//! integration validation when end-to-end scenarios drive real
-//! concurrent Tier 0 failures through `state.db::hook_events` and
-//! `state.db::lessons`.
+//! - `test_concurrent_tier0_writes_no_race` (Wave 7 Task 7.6): N
+//!   concurrent Tier 0 subprocesses — error text hits `No such file
+//!   or directory`, so each invocation writes to both `state.db`
+//!   (hook_events row + lesson upsert, SQLite WAL + busy_timeout=5s)
+//!   *and* three JSONL files. Closes the carry-forward coverage gap
+//!   left by the Tier 1-only test above.
 //!
 //! Isolation: each case gets its own `TempDir` bound to the child's
 //! HOME; XDG_STATE_HOME / XDG_CONFIG_HOME / XDG_DATA_HOME are cleared
@@ -305,7 +302,7 @@ fn test_concurrent_jsonl_append_no_race() {
     // so the test observes pure JSONL append contention.
     //
     // `JsonlWriter::append` opens the file per record, acquires an
-    // exclusive fs2 advisory lock (`fcntl` flock on Linux), writes
+    // exclusive fs4 advisory lock (`fcntl` flock on Linux), writes
     // the line, flushes, and releases the lock. The flock window
     // spans exactly one line per subprocess, so N concurrent bins
     // must produce N well-formed lines per file with no interleaving
@@ -436,5 +433,226 @@ fn test_concurrent_jsonl_append_no_race() {
         N,
         got_ids.len(),
         collected,
+    );
+}
+
+#[test]
+fn test_concurrent_tier0_writes_no_race() {
+    // Task 7.6 — Tier 0 concurrent write coverage (the "Known coverage
+    // gap" call-out at the top of this file).
+    //
+    // Tier 0 hits `No such file or directory` (FILE_NOT_FOUND_RE) and
+    // writes *both* state.db (hook_events row + lesson upsert) *and*
+    // three JSONL files per invocation. Race safety here rests on
+    // SQLite WAL + busy_timeout=5000ms (pragmas.rs) plus the same
+    // fs4 flock window that the Tier 1 test exercises.
+    //
+    // N=8 subprocesses with DISTINCT identities (different command
+    // prefixes survive aggressive normalisation → different tier-1
+    // hashes → 8 separate lessons, no row-level UNIQUE conflict). This
+    // isolates the test to table-level concurrency: SQLite WAL +
+    // busy_timeout=5000ms (crates/myth-db/src/sqlite/pragmas.rs) must
+    // serialise 8 concurrent INSERT INTO lessons + INSERT INTO
+    // hook_events without anyone erroring out.
+    //
+    // Same-identity row contention (where normalisation collapses
+    // inputs to the same hash → all children racing on the same
+    // lesson upsert) is intentionally out of scope here — that's a
+    // separate upsert-semantic question, not a WAL / busy_timeout
+    // question.
+    //
+    // What the test pins down:
+    //   - every subprocess returns exit 0
+    //   - state.db `hook_events` has exactly N rows
+    //   - state.db `lessons` has exactly N rows (distinct identities)
+    //   - the three JSONL files each have N well-formed lines
+    //   - every shadow line carries `tier_resolved=0`
+
+    const N: usize = 8;
+    // Distinct command prefixes; each survives normalisation and
+    // produces a distinct tier-1 hash. All trigger FILE_NOT_FOUND_RE.
+    const COMMANDS: [&str; N] = ["cat", "ls", "rm", "mv", "cp", "grep", "stat", "head"];
+
+    let tmp = TempDir::new().unwrap();
+    prep_home(tmp.path());
+
+    // Pre-migration warm-up: the first Database::open applies migration
+    // 001 (schema). If N children race on that first open, they collide
+    // on CREATE TABLE (migration.rs checks user_version outside a
+    // transaction, so concurrent applies can race). That race is a
+    // separate concern — isolate this test to *steady-state* concurrent
+    // writes by sinking one warm-up invocation first; the remaining N
+    // all hit an already-migrated DB.
+    let warmup_tuid = "toolu_tier0_warmup";
+    let warmup_env = serde_json::json!({
+        "session_id": "00000000-0000-4000-8000-000000000000",
+        "transcript_path": "/tmp/t0-concurrent-test.jsonl",
+        "cwd": "/tmp/t0-concurrent-test",
+        "permission_mode": "default",
+        "hook_event_name": "PostToolUseFailure",
+        "tool_name": "Bash",
+        "tool_input": {"command": "warmup_prefix warmup_target"},
+        "tool_use_id": warmup_tuid,
+        "error": "Exit code 2\nwarmup_prefix: warmup_target: No such file or directory",
+        "is_interrupt": false
+    })
+    .to_string();
+    let warmup_out = run_bin(POST_TOOL_FAILURE, &warmup_env, tmp.path());
+    assert_eq!(
+        warmup_out.code, 0,
+        "warm-up run failed before concurrent spawn: stderr={}",
+        String::from_utf8_lossy(&warmup_out.stderr)
+    );
+
+    let envelopes: Vec<(String, String)> = COMMANDS
+        .iter()
+        .enumerate()
+        .map(|(i, cmd)| {
+            let tool_use_id = format!("toolu_tier0_{:04}", i);
+            let session = format!("{:08x}-0000-4000-8000-{:012x}", i as u32, i as u64);
+            let env = serde_json::json!({
+                "session_id": session,
+                "transcript_path": "/tmp/t0-concurrent-test.jsonl",
+                "cwd": "/tmp/t0-concurrent-test",
+                "permission_mode": "default",
+                "hook_event_name": "PostToolUseFailure",
+                "tool_name": "Bash",
+                "tool_input": {"command": format!("{} missing_target", cmd)},
+                "tool_use_id": tool_use_id.clone(),
+                // FILE_NOT_FOUND_RE hit — distinct command prefix per
+                // child keeps the normalised identity hash distinct.
+                "error": format!("Exit code 2\n{}: missing_target: No such file or directory", cmd),
+                "is_interrupt": false
+            })
+            .to_string();
+            (tool_use_id, env)
+        })
+        .collect();
+
+    // Spawn all before waiting — DB + JSONL write windows must overlap
+    // in wall clock for the concurrency assertions to be meaningful.
+    let mut children: Vec<std::process::Child> = Vec::with_capacity(N);
+    for (_tuid, env) in &envelopes {
+        let mut child = Command::new(POST_TOOL_FAILURE)
+            .env("HOME", tmp.path())
+            .env_remove("XDG_STATE_HOME")
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("XDG_DATA_HOME")
+            .env_remove("CLAUDE_REVIEW_ACTIVE")
+            .env_remove("MYTH_DISABLE")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn post_tool_failure");
+        {
+            let mut stdin = child.stdin.take().expect("child stdin handle");
+            stdin
+                .write_all(env.as_bytes())
+                .expect("write envelope to stdin");
+        }
+        children.push(child);
+    }
+
+    for child in children {
+        let out = child.wait_with_output().expect("wait_with_output");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "Tier 0 concurrent child failed. stderr: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    let myth_home = tmp.path().join(".myth");
+    // state.db lives at $HOME/.myth/state.db (myth_common::state_db_path).
+    let state_db = myth_home.join("state.db");
+    let lesson_state = myth_home.join("lesson-state.jsonl");
+    let caselog = myth_home.join("caselog.jsonl");
+    let shadow = myth_home.join("metrics/reflector-shadow.jsonl");
+
+    // Invariant 1: state.db has a hook_events row per invocation AND a
+    // lessons row per distinct identity. Expected: warm-up (1) + N
+    // concurrent (8) = 9 rows each. WAL + busy_timeout must serialise
+    // these writes without drops.
+    let expected = N + 1;
+    let db = rusqlite::Connection::open(&state_db)
+        .unwrap_or_else(|e| panic!("open state.db at {:?}: {}", state_db, e));
+    let event_count: i64 = db
+        .query_row("SELECT COUNT(*) FROM hook_events", [], |row| row.get(0))
+        .expect("query hook_events");
+    assert_eq!(
+        event_count as usize, expected,
+        "hook_events should have {} rows (warm-up 1 + concurrent {}), got {}",
+        expected, N, event_count
+    );
+    let lesson_count: i64 = db
+        .query_row("SELECT COUNT(*) FROM lessons", [], |row| row.get(0))
+        .expect("query lessons");
+    assert_eq!(
+        lesson_count as usize, expected,
+        "lessons should have {} distinct rows (warm-up 1 + concurrent {}), got {}",
+        expected, N, lesson_count
+    );
+
+    // Invariant 2: all three JSONL files have exactly N+1 well-formed
+    // lines (warm-up + concurrent) — no interleaved bytes, no dropped
+    // records.
+    for path in [&lesson_state, &caselog, &shadow] {
+        let raw = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("read {:?}: {}", path, e));
+        let lines: Vec<&str> = raw.lines().collect();
+        assert_eq!(
+            lines.len(),
+            expected,
+            "{:?} should have {} lines (warm-up 1 + concurrent {}), got {}",
+            path,
+            expected,
+            N,
+            lines.len()
+        );
+        for line in &lines {
+            let _v: serde_json::Value = serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!(
+                    "interleaved / corrupt JSONL line in {:?}: {}; line: {}",
+                    path, e, line
+                )
+            });
+        }
+    }
+
+    // Invariant 3: every shadow record classified as Tier 0
+    // (tier_resolved=0). A Tier 1 fallthrough here would mean the
+    // classifier lost its input under concurrency.
+    let shadow_content = std::fs::read_to_string(&shadow).unwrap();
+    for line in shadow_content.lines() {
+        let v: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(
+            v["tier_resolved"], 0,
+            "Tier 0 concurrent must classify as tier_resolved=0; got line: {}",
+            line
+        );
+    }
+
+    // Invariant 4: every concurrent session_id is represented in
+    // lesson-state.jsonl. Tier 0's LessonCreated record carries
+    // session_id (not tool_use_id — that's Tier 1's
+    // PendingReflection). Catches silent drops masked by identical
+    // line counts.
+    let got_sessions: std::collections::HashSet<String> = std::fs::read_to_string(&lesson_state)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line).unwrap();
+            v["session_id"].as_str().unwrap().to_string()
+        })
+        .collect();
+    let mut expected_sessions: std::collections::HashSet<String> = (0..N)
+        .map(|i| format!("{:08x}-0000-4000-8000-{:012x}", i as u32, i as u64))
+        .collect();
+    expected_sessions.insert("00000000-0000-4000-8000-000000000000".to_string());
+    assert_eq!(
+        got_sessions, expected_sessions,
+        "Tier 0: session_id set mismatch between input envelopes+warm-up and lesson-state"
     );
 }
