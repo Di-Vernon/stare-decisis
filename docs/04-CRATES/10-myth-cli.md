@@ -1,5 +1,28 @@
 # `myth-cli` — 주 CLI 진입점
 
+> **2026-04-21 Wave 5.5 sync — Wave 5 구현 드리프트 7건 반영.**
+> Wave 5 커밋 `301497b` (`wave-5: implement Layer 5 myth-cli (13 subcommands + myth binary)`)이
+> authoritative. 본 문서는 illustrative 예시 수준에서 아래 7건을 실제 구현에 정렬:
+>
+> 1. **init** — `CLAUDE.md.template` 누락 시 skip + warning (비치명적).
+> 2. **install** — repo `templates/` → `~/.myth/templates/` 복사 단계 추가
+>    (`myth init`이 심볼릭/복사 소스로 사용).
+> 3. **install** — 빌드 경로 fallback 3단계 (원본의 `myth_home().join("rust/target/release")`
+>    경로 오류 수정): `current_exe().parent()` → `MYTH_REPO_ROOT` env → hardcoded
+>    `~/myth/rust/target/release/`.
+> 4. **lesson** — `LessonStore::{split, merge, count_archived, query}` 부재. split/merge는
+>    Milestone 지연 stub (Wave 8), list는 `list_active + list_lapsed` 조합 + client-side filter,
+>    appeal/retrial은 `myth_db::appeal::file_appeal(db, id, AppealType, rationale)` 실 API.
+> 5. **status** — `EmbedClient::ping()` 미제공. socket 존재 + `UnixStream::connect` 빠른
+>    체크로 대체 (상세 uptime/request_count는 `myth embed status` 위임).
+> 6. **run (parallel)** — Wave 4에서 `Orchestrator::execute_plan(plan_path, base_repo)` 2-arg
+>    확장. CLI는 `base_repo = std::env::current_dir()?` 전달.
+> 7. **watch** — Wave 4에서 `run_dashboard(session_short: impl Into<String>)` 확장. CLI는
+>    `SessionId::new().short()` 전달.
+>
+> carry-forward 축소: docs/10 sync 해소. 잔존 carry-forward는 fs2→fs4 (Wave 6) + Tier 0
+> concurrent coverage gap (Wave 6/7) 2건.
+
 ## 역할
 
 사용자가 직접 호출하는 **주 CLI 바이너리**. 단일 `myth` 커맨드에 모든 서브커맨드를 dispatch한다. 다른 모든 crate를 orchestrate하는 **최상위 레이어**.
@@ -272,12 +295,14 @@ pub async fn run(args: InitArgs) -> Result<ExitCode> {
         &claude_dir.join("agents/observer.md"),
     )?;
     
-    // 3. CLAUDE.md 템플릿 (선택)
+    // 3. CLAUDE.md — Wave 5.5 sync drift 1: 템플릿 누락 시 skip + warning (비치명)
     if !project.join("CLAUDE.md").exists() {
-        let template = std::fs::read_to_string(
-            myth_home().join("templates/CLAUDE.md.template")
-        )?;
-        std::fs::write(project.join("CLAUDE.md"), template)?;
+        match std::fs::read_to_string(myth_home().join("templates/CLAUDE.md.template")) {
+            Ok(body) => std::fs::write(project.join("CLAUDE.md"), body)?,
+            Err(_) => eprintln!(
+                "warning: CLAUDE.md.template not found, skipping CLAUDE.md scaffold"
+            ),
+        }
     }
     
     println!("myth initialized in {}", project.display());
@@ -298,7 +323,15 @@ pub async fn run(args: InstallArgs) -> Result<ExitCode> {
     let bin_dir = dirs::home_dir().unwrap().join(".local/bin");
     std::fs::create_dir_all(&bin_dir)?;
     
-    let myth_rust_target = myth_home().join("rust/target/release");
+    // Wave 5.5 sync drift 3: 빌드 경로 fallback 3단계.
+    //   1. current_exe().parent()  — 첫 실행(repo 빌드 직후) `~/myth/rust/target/release/`
+    //   2. MYTH_REPO_ROOT env       — {root}/rust/target/release
+    //   3. hardcoded                — ~/myth/rust/target/release/
+    // 원본의 `myth_home().join("rust/target/release")`는 `~/.myth/rust/...`를 가리켜 미존재.
+    let myth_rust_target = locate_rust_target()?;
+    let repo_root = myth_rust_target.ancestors().nth(2)
+        .ok_or_else(|| anyhow!("cannot derive repo root"))?
+        .to_path_buf();
     
     // 8개 바이너리 심볼릭 링크 (또는 복사)
     let binaries = [
@@ -332,6 +365,10 @@ pub async fn run(args: InstallArgs) -> Result<ExitCode> {
     write_python_shim(&bin_dir, "myth-assessor", "myth_py.assessor.cli")?;
     write_python_shim(&bin_dir, "myth-observer", "myth_py.observer.cli")?;
     
+    // Wave 5.5 sync drift 2: repo `templates/` → `~/.myth/templates/` 복사.
+    // `myth init`이 심볼릭/복사 소스로 사용. 원본 docs/10 §install이 누락한 단계.
+    copy_templates(&repo_root)?;
+    
     // PATH 확인
     if !std::env::var("PATH").unwrap_or_default().contains(".local/bin") {
         eprintln!("");
@@ -343,6 +380,39 @@ pub async fn run(args: InstallArgs) -> Result<ExitCode> {
     init_myth_home()?;
     
     Ok(ExitCode::SUCCESS)
+}
+
+/// Wave 5.5 sync drift 3: 빌드 경로 fallback 3단계 헬퍼.
+fn locate_rust_target() -> Result<PathBuf> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            if parent.join("myth-embed").exists()
+                || parent.join("myth-hook-pre-tool").exists() {
+                return Ok(parent.to_path_buf());
+            }
+        }
+    }
+    if let Ok(root) = std::env::var("MYTH_REPO_ROOT") {
+        let p = PathBuf::from(root).join("rust/target/release");
+        if p.exists() { return Ok(p); }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let p = home.join("myth/rust/target/release");
+        if p.exists() { return Ok(p); }
+    }
+    Err(anyhow!("binary source not found. Set MYTH_REPO_ROOT or run from repo."))
+}
+
+/// Wave 5.5 sync drift 2: repo `templates/` → `~/.myth/templates/` 재귀 복사.
+fn copy_templates(repo_root: &Path) -> Result<()> {
+    let src = repo_root.join("templates");
+    if !src.exists() {
+        eprintln!("warning: {} not found, skipping templates copy", src.display());
+        return Ok(());
+    }
+    let dst = myth_common::myth_home().join("templates");
+    copy_dir_recursive(&src, &dst)?;
+    Ok(())
 }
 
 fn init_myth_home() -> Result<()> {
@@ -386,9 +456,11 @@ pub async fn run(args: RunArgs) -> Result<ExitCode> {
             max_concurrent: args.max_concurrent,
             ..Default::default()
         });
-        let report = orch.execute_plan(&plan_path).await?;
+        // Wave 5.5 sync drift 6: Wave 4에서 execute_plan(plan_path, base_repo) 2-arg 확장.
+        let base_repo = std::env::current_dir()?;
+        let report = orch.execute_plan(&plan_path, &base_repo).await?;
         println!("{}", report.to_summary());
-        Ok(if report.failed == 0 { ExitCode::SUCCESS } else { ExitCode::from(1) })
+        Ok(if report.failed() == 0 { ExitCode::SUCCESS } else { ExitCode::from(1) })
     } else {
         // 인터랙티브 모드
         let worktree = std::env::current_dir()?;
@@ -407,17 +479,19 @@ pub async fn run(args: StatusArgs) -> Result<ExitCode> {
     
     let active = store.list_active()?.len();
     let lapsed = store.list_lapsed()?.len();
-    let archived_count = store.count_archived()?;
-    
-    let embed_status = EmbedClient::new().ping().await.ok();
-    
+    // Wave 5.5 sync drift 4: LessonStore::count_archived 미지원 → archived 통계는 Wave 8.
+
+    // Wave 5.5 sync drift 5: EmbedClient::ping() 부재. socket 존재 + UnixStream::connect
+    // 빠른 체크로 대체. 상세 uptime/request_count는 `myth embed status` 위임.
+    let embed_running = {
+        use std::os::unix::net::UnixStream;
+        let p = myth_common::embed_socket_path();
+        p.exists() && UnixStream::connect(&p).is_ok()
+    };
+
     println!("myth status");
-    println!("  Lessons: {} active, {} lapsed, {} archived", active, lapsed, archived_count);
-    match embed_status {
-        Some(info) => println!("  myth-embed: running (uptime {}s, {} requests)",
-                               info.uptime_secs, info.request_count),
-        None => println!("  myth-embed: not running"),
-    }
+    println!("  Lessons: {active} active, {lapsed} lapsed");
+    println!("  myth-embed: {}", if embed_running { "running" } else { "not running" });
     
     // Hook latency 7-day P99
     let p99 = compute_hook_p99_last_7d()?;
@@ -438,7 +512,9 @@ pub async fn run(args: StatusArgs) -> Result<ExitCode> {
 
 ```rust
 pub async fn run(args: WatchArgs) -> Result<ExitCode> {
-    myth_ui::run_dashboard().await?;
+    // Wave 5.5 sync drift 7: Wave 4에서 run_dashboard(session_short) 1-arg로 확장.
+    let session = myth_common::SessionId::new();
+    myth_ui::run_dashboard(session.short()).await?;
     Ok(ExitCode::SUCCESS)
 }
 ```
@@ -497,9 +573,18 @@ pub async fn run(args: LessonArgs) -> Result<ExitCode> {
         LessonAction::Show { id } => show_lesson(&id).await,
         LessonAction::Appeal { id, reason } => appeal_lesson(&id, &reason).await,
         LessonAction::Retrial { id, reason } => retrial_lesson(&id, &reason).await,
-        LessonAction::Split { id, reason } => split_lesson(&id, &reason).await,
-        LessonAction::Merge { id1, id2, reason } => merge_lessons(&id1, &id2, &reason).await,
+        // Wave 5.5 sync drift 4: myth-db에 LessonStore::{split, merge} 미지원 →
+        // Milestone 지연 stub (Wave 8 integration). appeal/retrial은 실 API.
+        LessonAction::Split { .. } | LessonAction::Merge { .. } => split_merge_stub(),
     }
+}
+
+fn split_merge_stub() -> Result<ExitCode> {
+    eprintln!(
+        "split/merge: not yet implemented, planned for Wave 8 integration \
+         (requires LessonStore DB-level support)"
+    );
+    Ok(ExitCode::SUCCESS)
 }
 
 async fn appeal_lesson(id: &str, reason: &str) -> Result<ExitCode> {
@@ -535,7 +620,9 @@ async fn appeal_lesson(id: &str, reason: &str) -> Result<ExitCode> {
         result: "pending".into(),
         rationale: Some(reason.to_string()),
     };
-    store.record_appeal(&appeal)?;
+    // Wave 5.5 sync drift 4: store.record_appeal(&AppealRecord) 미제공 →
+    // myth_db::appeal::file_appeal(db, lesson_id, AppealType::Appeal, rationale).
+    myth_db::appeal::file_appeal(store.db(), lesson_id, AppealType::Appeal, Some(reason))?;
     
     // lesson.appeals 증가
     let mut updated = lesson.clone();
@@ -551,7 +638,21 @@ async fn list_lessons(level: Option<u8>, status: Option<String>, limit: usize) -
     let db = Database::open(&myth_common::state_db_path())?;
     let store = SqliteLessonStore::new(db);
     
-    let all = store.query(LessonQuery { level, status, limit })?;
+    // Wave 5.5 sync drift 4: LessonStore::query(LessonQuery) 미제공 →
+    // list_active + list_lapsed 조합 + client-side filter. archived 조회는 Wave 8.
+    let all: Vec<Lesson> = match status.as_deref() {
+        Some("lapsed") => store.list_lapsed()?,
+        Some("active") | None => store.list_active()?,
+        Some("archived") => {
+            eprintln!("warning: --status archived not yet supported (pending Wave 8)");
+            return Ok(ExitCode::SUCCESS);
+        }
+        Some(other) => return Err(anyhow!("unknown status {other}")),
+    };
+    let all: Vec<Lesson> = all.into_iter()
+        .filter(|l| level.map_or(true, |lv| l.level as u8 == lv))
+        .take(limit)
+        .collect();
     
     for l in all {
         println!("{:8} L{} {:10} {:20} (rec {}, {})",
@@ -755,7 +856,8 @@ myth status --format json
 | `myth status` | 간단 요약 | Day-1 |
 | `myth watch` | TUI 대시보드 | Day-1 |
 | `myth doctor [--perf-check --wsl-check --migration]` | 헬스 체크 | Day-1 |
-| `myth lesson list/show/appeal/retrial/split/merge` | lesson 관리 | Day-1 |
+| `myth lesson list/show/appeal/retrial` | lesson 관리 (실 API) | Day-1 |
+| `myth lesson split/merge` | lesson 관리 (stub; LessonStore DB 확장 대기) | Wave 8 |
 | `myth observer run [--dry]` | 주간 분석 수동 실행 | Day-1 |
 | `myth gavel status/stop` | The Gavel daemon 관리 | Milestone C |
 | `myth embed status/stop/probe` | embed daemon 관리 | Day-1 |
