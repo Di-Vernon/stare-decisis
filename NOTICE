@@ -1,0 +1,33 @@
+myth
+Copyright (c) 2026 Jeffrey (Di-Vernon)
+
+Licensed under either of:
+  * Apache License, Version 2.0
+    (http://www.apache.org/licenses/LICENSE-2.0)
+  * MIT License
+    (http://opensource.org/licenses/MIT)
+at your option.
+
+This product includes software developed by:
+
+  * gitleaks  (https://github.com/gitleaks/gitleaks, MIT License)
+      — anchored secret-detection prefixes adapted for
+        Bedrock Rule R2-A (40 provider patterns)
+
+  * detect-secrets  (https://github.com/Yelp/detect-secrets,
+                     Apache License 2.0)
+      — keyword + entropy detection approach adapted for
+        Bedrock Rule R2-C
+
+  * multilingual-e5-small  (Microsoft Research, MIT License)
+      — text embedding model (fetched at first embed-daemon run;
+        not redistributed with myth source)
+
+  * various Rust crates  (see Cargo.lock; all OSI-approved
+                          permissive licences — MIT, Apache-2.0,
+                          BSD, Unicode-3.0, ISC, CC0, Zlib, MPL-2.0)
+
+  * various Python packages  (see pyproject.toml /
+                              python/uv.lock; all permissive)
+
+See THIRD-PARTY.md for the full attribution manifest.

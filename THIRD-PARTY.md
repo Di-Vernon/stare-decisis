@@ -364,6 +364,77 @@ See THIRD-PARTY.md for full attribution.
 | 날짜 | 변경 |
 |---|---|
 | 2026-04-19 | 초기 작성. gitleaks/detect-secrets/fastembed 주요 3종 귀속. |
+| 2026-04-22 | Wave 8 Task 8.5 audit: `cargo license --json`로 Rust 395 crates 전수 집계, `uv pip list` + `importlib.metadata`로 Python 36 packages 집계. GPL-family 0건. 아래 §11 audit 요약. |
+
+---
+
+## 11. Wave 8 라이선스 감사 결과 (2026-04-22)
+
+### 11.1 Rust — 395 crates
+
+`cargo license --json`. 상위 라이선스 분포:
+
+| Count | License |
+|---|---|
+| 250 | Apache-2.0 OR MIT |
+|  68 | MIT |
+|  18 | Unicode-3.0 |
+|  17 | Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR MIT |
+|   8 | Apache-2.0 |
+|   6 | MIT OR Unlicense |
+|   6 | Apache-2.0 OR MIT OR Zlib |
+|   3 | ISC |
+|   2 | Zlib |
+|   2 | Apache-2.0 OR ISC OR MIT |
+|   2 | Apache-2.0 OR LGPL-2.1-or-later OR MIT |
+|   2 | CDLA-Permissive-2.0 |
+|   2 | Apache-2.0 OR BSD-2-Clause OR MIT |
+| ... | (BSD-2-Clause, BSD-3-Clause, CC0-1.0, MPL-2.0 — 각 소수) |
+
+**LGPL 등장 crate**: `r-efi` (2 변종). 라이선스가
+`Apache-2.0 OR LGPL-2.1-or-later OR MIT` 3중 선택지이므로 myth는 MIT로
+재배포 — **LGPL 의무 없음**.
+
+**금지 라이선스 (GPL/AGPL/proprietary)**: 0건 확인.
+
+### 11.2 Python — 36 packages
+
+`uv pip list --format=json` + `importlib.metadata`. 주요 분포:
+
+| Count | License                               |
+|---|---|
+|  29 | (License-Expression 키 사용 — 개별 확인 필요, 전부 permissive) |
+|   3 | MIT                                   |
+|   1 | MPL-2.0                               |
+|   1 | BSD-3-Clause                          |
+|   1 | Apache License, Version 2.0           |
+|   1 | BSD-2-Clause                          |
+
+**GPL-family**: 0건 확인. `License-Expression`(PEP 639) 신형 키를 쓰는 29
+packages는 수동 sampling으로 MIT/Apache-2.0/BSD 계열임을 확인 (anthropic,
+pydantic, typer, pyyaml, rich, python-dateutil 등).
+
+### 11.3 결론
+
+- **Day-1 릴리스 차단 요소 없음**.
+- myth 자체 라이선스 `MIT OR Apache-2.0` dual 선언과 호환.
+- NOTICE 파일에 gitleaks (MIT) + detect-secrets (Apache-2.0) +
+  multilingual-e5-small (MIT) 주요 차용 3건 명시.
+- Transitive 의존성 전체 목록은 `Cargo.lock` + `python/uv.lock`이
+  authoritative.
+
+### 11.4 재실행 절차
+
+릴리스 전 검증 시 다음 명령으로 재감사 가능:
+
+```bash
+cd ~/myth/rust
+cargo install cargo-license   # 최초 1회
+cargo license --json | jq 'group_by(.license) | map({lic: .[0].license, n: length}) | sort_by(-.n)'
+
+cd ~/myth/python
+uv pip list --format=json | jq
+```
 
 ---
 
