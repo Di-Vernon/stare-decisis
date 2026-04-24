@@ -1,9 +1,9 @@
 # myth — Constitution
 
-> **Version**: 2.3 (Rough Start + Accumulated Commons + Naming Refresh)
-> **Status**: Ratified
-> **Effective Date**: 2026-04-19
-> **Supersedes**: v2.1 (2026-04-18, "Harness Sentencing System")
+> **Version**: 2.4 (Remand Reservation — EXPERIMENTAL, scaffold-only)
+> **Status**: Ratified (Remand mechanism reserved, NOT active until Milestone A)
+> **Effective Date**: 2026-04-24
+> **Supersedes**: v2.3 (2026-04-19, "Naming Refresh + myth Independence")
 > **Author**: Jeffrey (Principal Designer) & Claude (co-designer)
 
 ---
@@ -13,6 +13,12 @@
 이 문서는 `myth`의 학습·집행 시스템 — 즉 Claude Code를 감싸는 에이전트 오케스트레이터가 자신의 실수로부터 학습하고, 학습된 규칙으로 미래의 실수를 방지하는 메커니즘 — 의 **설계 원칙·구조·집행 규범**을 정의한다.
 
 v2.3은 v2.1의 17개 조항·4개 층위 구조 위에 **네이밍 정제(Naming Refresh)**를 적용한다. 실질적 원칙 변경은 없다. 시스템은 원래 `harness-orchestrator` 내부 하위 시스템으로 설계되었으나, **myth라는 독립 프로젝트로 승격**되면서 용어 체계를 일관되게 정비했다.
+
+**v2.4 변경 (EXPERIMENTAL, scaffold-only)**: 2026-04-23~24 Remand prototype 실험 (`experiment/remand-prototype/results/FINAL_REPORT.md`)을 근거로 다음 단일 변경 추가:
+
+- Sentencing Grid에 **Remand (환송)** variant 예약 (`Warn → Remand → Strike`, 8-step). 활성화는 Milestone A (Tier 3 LLM-judge assessor) 도달 + selective trigger pilot 30일 + Jeffrey 명시 의결을 모두 충족할 때만 가능.
+- v0.2 코드 (`Enforcement::Remand`, `Verdict.subtleness_score`) 는 dead code scaffold. 실 호출되면 Warn으로 자동 demotion (fail-safe).
+- Article 1-19의 실질 원칙은 변경 없음. v2.4는 Article 5 §"The Grid as Implementation"의 8-step 확장 + Part VII 신규 §VII.6 + Article 19의 Remand Day-1 제외 명시 + Article 4의 Remand reference 만 추가.
 
 **v2.3 네이밍 변경 요약** (Article 1-19 실질 내용 불변):
 
@@ -396,6 +402,8 @@ Ayres & Braithwaite 1992의 원칙을 이 시스템에 적용:
 - Part VII (Sentencing Grid)
 - Part VIII (Three-Agent Architecture) — Observer의 교육 자료 생성
 
+**[v2.4 추가 — EXPERIMENTAL]**: Remand variant (Part VII §VII.6, scaffold-only)는 Rehabilitation의 active intervention 형태로 예약되었다. 단 Phase 5 실험에서 blanket 적용은 *iatrogenic* (narrowing effect로 broad judgment 손실)임이 확인되어, selective trigger (subtleness_score ≥ θ) 조건 하에서만 헌법적이다. Tier 3 assessor 미가동 시 Remand는 Warn으로 자동 demotion.
+
 ### Amendment Conditions
 
 1. AI가 도덕 행위자로 인정되어 응보가 의미를 가지게 될 때
@@ -425,6 +433,8 @@ Ayres & Braithwaite 1992의 원칙을 이 시스템에 적용:
 - Level 1-4 × 모든 Recurrence: Note (24 진화)
 
 사용자가 실제 경험을 통해 Level 1-4의 24 셀을 채워가며 개인화된 비례성을 구축한다.
+
+**[v2.4 변경 — EXPERIMENTAL]**: 7-step enforcement 위에 Remand variant 예약 (`Dismiss → Note → Advisory → Caution → Warn → Remand → Strike → Seal`, 8-step). 활성화 조건은 Milestone A 도달 + Tier 3 subtleness classifier + 30일 selective trigger pilot 통과. v0.2에서 Remand는 dead code이며, 실 호출되면 Warn으로 자동 demote 된다 (Phase 5 실험 결과: blanket Remand는 ROI 0이지만 selective Remand는 subtle multi-axis issue에서 +1 score gain). 상세: `experiment/remand-prototype/design/CONSTITUTION-v2.4-remand-draft.md`, Part VII §VII.6.
 
 ### Proportionality in Both Directions
 
@@ -1334,7 +1344,10 @@ Milestone 이후 진화 엔벨로프:
   16. 항소 시스템 강화
   17. Semantic detection (Milestone D)
   18. AST validation (Milestone E)
+  19. [v2.4 EXPERIMENTAL] Remand mechanism (Milestone A 활성화 후 selective trigger pilot 통과 시) — Part VII §VII.6
 ```
+
+**[v2.4 명시적 제외]**: Remand variant (`Enforcement::Remand`)는 Day-1 scope **아님**. Tier 3 dependency (subtleness classifier)이며, v0.1.0과 v0.2 모두에서 dead code. 우발 활성화 방지를 위해 Gavel은 Remand verdict를 항상 Warn으로 demote (`verdict.rs::to_hook_json` 참조). 활성화는 §VII.6의 6 조건 모두 충족 시.
 
 ### BML Loop Requirement
 
@@ -1679,6 +1692,66 @@ Seal         Bedrock Rule 전용, 항소 못 내려가는 하한
   Warn        최대 2회/세션
   Strike      제한 없음 (5회+ Observer 경고)
 ```
+
+## §VII.6 Remand Mechanism (RESERVED — EXPERIMENTAL, dead code in v0.2)
+
+> **Status**: scaffold-only. Activates only at Milestone A + selective pilot pass + Jeffrey 의결.
+> **Empirical basis**: `experiment/remand-prototype/results/FINAL_REPORT.md` (Phase 0~2.4, 51 API calls, $1.40)
+> **Failure mode if accidentally fired in v0.2**: Gavel demotes to Warn (`verdict.rs::to_hook_json` Remand arm).
+
+### Definition
+
+Remand = Verdict 발생 시 issue를 Claude에게 환송하여 *동일 assistant turn 내 재응답*을 요구하는 enforcement step. Warn (재시도 가이드 후 종료)보다 강하고 Strike (차단)보다 약하다. Bedrock (Article 7) 우회 불가.
+
+### Activation Predicate
+
+Remand는 다음 모든 조건 만족 시에만 fire (Milestone A 이후):
+
+1. Verdict ∈ {Warn, 일부 Caution} (Bedrock 제외)
+2. `subtleness_score ≥ θ` (default θ = 0.7, Tier 3 assessor 계산)
+3. retry_count_in_session < 3 (Reflexion 표준 cap)
+4. similarity_to_previous_response < 0.95 (mode collapse 방지)
+
+조건 미충족 시 Warn으로 자동 강등.
+
+### Loop Structure
+
+```
+1. Initial Claude response
+2. Gavel evaluate → Verdict + axes
+3. If Remand activation predicate met:
+     a. Generate structured feedback (issue_context: location/why/risk/remedy/example)
+     b. Inject as Claude system msg
+     c. Re-elicit Claude response
+     d. Re-evaluate
+     e. If still Remand: counter++, GOTO 3a (max 3)
+     f. If counter >= 3: escalate to Strike with mode_collapse flag
+4. Final Verdict → caselog
+```
+
+### Empirical Justification (Phase 5 finding)
+
+- Blanket Remand: delta_L5_L1 = 0.0 (Opus 4.7 judge, 25 cells) → 도입 ROI 0
+- Subtle multi-axis 시나리오 (defense-in-depth 류): L4/L5 가이드가 +1 score gain
+- Obvious 시나리오: L4/L5 narrowing effect로 -1 secondary quality
+- 평균 0.0은 두 효과의 cancellation → selective trigger 필수
+
+### Activation Gate (Article 19와 결합)
+
+Remand의 production 활성화는 다음 모두 충족 시:
+
+1. Tier 3 LLM-judge assessor 활성 (Milestone A)
+2. `compute_subtleness_score` 실 구현 (현재 Python stub)
+3. Production caselog 50+ case 누적
+4. 30일 shadow mode pilot 완료 (subtleness ≥ 0.7 case 만 Remand)
+5. Multi-judge cross-validation (단일 Opus judge bias 제거)
+6. Jeffrey 명시 의결
+
+조건 1-3 미충족 시 v2.4 = v2.3 동작. 조건 4-5 NO-GO 시 v2.4 → v2.3 demotion (`Enforcement::Remand` variant 제거 = major version bump).
+
+### Ratchet (Demotion 가능)
+
+본 §VII.6은 Phase 5 실험 데이터 기반으로 추가되었다. Milestone A pilot 결과 NO-GO 시 §VII.6 폐기 + Remand variant 제거. 데이터가 결정한다.
 
 ---
 
@@ -2046,6 +2119,48 @@ Day-1 완료 기준: Wave 0-8 전부 green + v0.1.0 Git tag.
 ## Appendix C. Change Log
 
 ```
+v2.4 (2026-04-24) — Remand Reservation (EXPERIMENTAL, scaffold-only)
+  Type: Additive (no behavioral change in v0.2; activation gated on Milestone A).
+
+  Empirical basis:
+    · experiment/remand-prototype/results/FINAL_REPORT.md
+    · 51 API calls (26 Sonnet 4.5 actor + 25 Opus 4.7 judge)
+    · $1.40 cost
+    · Phase 0~2.4 across 2026-04-23 ~ 2026-04-24
+
+  Findings (verbatim from FINAL_REPORT Section 1):
+    · Blanket Remand: NO-GO (delta_L5_L1 = 0.0 with Opus judge)
+    · Selective Remand: CONDITIONAL GO (subtle multi-axis +1 score gain)
+    · Prerequisite: subtleness classifier = Milestone A Tier 3
+
+  Additions (all marked EXPERIMENTAL, not active):
+    · Sentencing Grid 8-step extension (Article 5 §The Grid as Implementation)
+    · Part VII §VII.6 — Remand Mechanism (Reserved)
+    · Article 4 reference: Remand as future Rehabilitation mechanism
+    · Article 19: Day-1 explicit exclusion of Remand
+    · Code scaffold (v0.2):
+        - Enforcement::Remand variant (myth-common, dead code)
+        - Verdict.subtleness_score field (myth-gavel, None)
+        - myth-hooks::remand orchestration module (dead code)
+        - myth_py.assessor.remand_feedback Python stub
+        - myth-cli `key` subcommand implementation (~/.myth/credentials, 0600)
+
+  Activation gate (must satisfy ALL):
+    1. Tier 3 LLM-judge assessor active (Milestone A)
+    2. compute_subtleness_score implemented (replace Python stub)
+    3. Production caselog 50+ cases accumulated
+    4. 30-day shadow mode pilot completed (subtleness >= 0.7 only)
+    5. Multi-judge cross-validation (>= 2 judge models)
+    6. Jeffrey explicit ratification
+
+  Demotion path (if pilot NO-GO):
+    · §VII.6 removed
+    · Enforcement::Remand variant removed (major version bump)
+    · v2.4 → v2.3 demotion
+    · Data-driven decision
+
+  Approved by: Jeffrey (2026-04-24, post-Phase 5 review)
+
 v2.3 (2026-04-19) — Naming Refresh + myth Independence
   Type: Terminology update (no substantive changes to principles).
 
