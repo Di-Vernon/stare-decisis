@@ -19,24 +19,52 @@ from pathlib import Path
 from anthropic import Anthropic
 from anthropic.types import TextBlock
 
-API_KEY_PATH = Path.home() / ".config" / "myth" / "api_key"
+API_KEY_PATH = Path.home() / ".config" / "myth" / "api_key"  # legacy raw-key file
+CREDENTIALS_PATH = Path.home() / ".myth" / "credentials"  # canonical, matches myth_common::credentials_path
 DISPATCH_LOG = Path.home() / ".local" / "state" / "myth" / "tier3-dispatch.jsonl"
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 
-def load_api_key() -> str:
-    """Resolve API key: env var > config file. Raises if neither is set.
+def _read_credentials_file(path: Path) -> str | None:
+    """Parse the canonical KEY=VALUE credentials file. None if not present or no match."""
+    if not path.exists():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        if k.strip() == "ANTHROPIC_API_KEY" and v.strip():
+            return v.strip()
+    return None
 
-    The raise path is the Milestone A gate — on Day-1, no key is configured,
-    so callers naturally bail out before any SDK call.
+
+def load_api_key() -> str:
+    """Resolve API key in priority order:
+
+    1. ANTHROPIC_API_KEY env var (canonical, what the Anthropic SDK auto-detects)
+    2. MYTH_ANTHROPIC_API_KEY env var (legacy, transitional)
+    3. ~/.myth/credentials file (KEY=VALUE format, written by `myth key set`)
+    4. ~/.config/myth/api_key file (legacy raw-key file)
+
+    Raises RuntimeError if none resolve. The raise path is the Milestone A
+    gate — on Day-1 with no key configured, callers bail out before any
+    SDK call.
     """
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if key:
+        return key
     key = os.getenv("MYTH_ANTHROPIC_API_KEY")
     if key:
         return key
+    parsed = _read_credentials_file(CREDENTIALS_PATH)
+    if parsed:
+        return parsed
     if API_KEY_PATH.exists():
         return API_KEY_PATH.read_text(encoding="utf-8").strip()
     raise RuntimeError(
-        "No API key configured. Run `myth key set` (Milestone A required)."
+        "No API key configured. Run `myth key set --from-stdin`, "
+        "set ANTHROPIC_API_KEY env var, or create ~/.myth/credentials."
     )
 
 
