@@ -388,6 +388,21 @@ Prioritized by shadow-mode-unblock impact, then by engineering cost.
   flow distinct from block flow). *Est: 6h.*
 - Milestone A Tier 3 flip: change `tier3_gate_active()` from `false` to
   rolling-compliance check reading reflector-shadow.jsonl. *Est: 4h.*
+- **[v2.4 EXPERIMENTAL]** Subtleness classifier training: implement
+  `myth_py.assessor.remand_feedback.compute_subtleness_score`
+  (currently `NotImplementedError`). Training corpus = first 50 Tier 3
+  caselog entries × subtleness label (manual or LLM-judged). Reference
+  implementation at `experiment/remand-prototype/src/evaluator_llm_judge.py`
+  (Opus 4.7 + tool_use + prompt caching, validated $0.05/call). *Est: 1d
+  + 50 caselog cases collected during Shadow-21d.*
+- **[v2.4 EXPERIMENTAL]** Remand selective trigger pilot (30-day shadow):
+  fire Remand only when `subtleness_score ≥ 0.7`, log A/B vs Warn-only
+  cohort. CONSTITUTION §VII.6 activation gate condition #4. *Est: 30d
+  observation + 1d analyzer.*
+- **[v2.4 EXPERIMENTAL]** Multi-judge cross-validation: replicate Phase
+  2.4 Opus 4.7 judge with Sonnet 4.6 + at least one non-Anthropic
+  model on the same 25 cells. CONSTITUTION §VII.6 activation gate
+  condition #5. *Est: 4h + ~$1 budget.*
 
 ### P3 — Milestone C preparation
 
@@ -410,16 +425,17 @@ Prioritized by shadow-mode-unblock impact, then by engineering cost.
 
 | Milestone | Trigger detection | Trigger path | Activation impl |
 |---|---|---|---|
-| A | ✓ analyzer.py tier_1_compliance_rate | ✓ brief_gen.py + migration.py | ✓ Tier 3 wiring (gate flip only) |
+| A | ✓ analyzer.py tier_1_compliance_rate | ✓ brief_gen.py + migration.py | ◐ Tier 3 wiring (gate flip ready) + ○ subtleness classifier (v2.4 added) + ○ selective Remand pilot (v2.4 added) |
 | B | ○ placeholder | ○ placeholder | ○ vector store swap (not started) |
 | C | ✓ hook-latency.ndjson reader | ✓ migration.py::_milestone_c | ◐ daemon design pending |
 | D | ○ placeholder | ○ observer report analysis | ○ semantic detection (not started) |
 | E | ○ placeholder | ○ FP/FN monitoring | ○ AST validation (not started) |
 
-**Day-1 readiness**: only Milestone A has end-to-end path ready for
-immediate flip when the compliance metric crosses. Others require
-additional implementation at activation time (as designed — defer work
-until signal confirms need).
+**Day-1 readiness**: Milestone A has end-to-end Tier 3 wiring ready for
+gate flip; v2.4 (2026-04-24) adds two new pre-activation deliverables
+(subtleness classifier + 30-day selective Remand pilot) per CONSTITUTION
+§VII.6 activation gate. Others require additional implementation at
+activation time (as designed — defer work until signal confirms need).
 
 ---
 
@@ -448,6 +464,23 @@ Combined est: ~8h. No behavior change; reduces future-work surface.
 All P2+ items. Do not pre-empt Milestone signals with speculative
 implementations.
 
+### v2.4 Remand experiment outcome (2026-04-24, additive)
+
+Phase 5 Remand prototype experiment completed: Blanket Remand NO-GO
+(delta_L5_L1 = 0.0 with Opus 4.7 judge), Selective Remand conditional
+GO. CONSTITUTION promoted v2.3 → v2.4 (additive only — Article 5
+§"Grid as Implementation" + Part VII §VII.6 + Article 19 explicit
+Day-1 exclusion + Article 4 reference). v0.2 ships scaffold only;
+Remand activates only after Milestone A + 30-day selective pilot +
+Jeffrey ratification (CONSTITUTION §VII.6 activation gate, 6 conditions).
+
+This finding **does not** alter Day-1 v0.1.0 readiness. v0.1.0 has no
+Remand surface; v0.2-alpha adds dead-code scaffold (`#[allow(dead_code)]`)
+that demotes to Warn if accidentally fired. 281 Rust + 39 Python tests
+green, 0 regression.
+
+Reference: `experiment/remand-prototype/results/FINAL_REPORT.md`.
+
 ### Success criteria for next health report (post-Shadow-21d)
 
 - Drift count unchanged at 11 (no new drift introduced)
@@ -455,3 +488,5 @@ implementations.
 - WMD count reduced from 3 to 0
 - R10 closed (CI green)
 - Milestone A trigger data collected (Tier 1 compliance % reported)
+- v2.4 P2 Remand items: subtleness classifier corpus accumulated
+  (≥50 caselog cases tagged with subtleness label)
