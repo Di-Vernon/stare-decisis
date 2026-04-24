@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# DEPRECATED in v0.1.1 — superseded by `myth link`.
+# This script will be removed in v0.2.
+# Migration: `myth link <project-path>` (or just `myth link` from project dir).
+#
+# Also note: this script destructively replaces the entire `hooks` key in
+# settings(.local).json, erasing unrelated third-party hook entries.
+# `myth link` preserves all non-myth entries.
+echo "⚠️  DEPRECATED: install_myth_to_project.sh is superseded by 'myth link'" >&2
+echo "   Please use: myth link ${1:-.}" >&2
+echo "   This script will be removed in v0.2." >&2
+echo "" >&2
+
 # install_myth_to_project.sh — Install myth hooks into a project's Claude Code settings
 #
 # Mode: coexist-selective (Option 3)

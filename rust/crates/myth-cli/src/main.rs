@@ -29,6 +29,8 @@ async fn main() -> ExitCode {
         Command::Embed(a) => subcmd::embed::run(a).await,
         Command::Constitution(a) => subcmd::constitution::run(a).await,
         Command::Key(a) => subcmd::key::run(a).await,
+        Command::Link(a) => subcmd::link::run(a).await,
+        Command::Unlink(a) => subcmd::link::unlink(a).await,
     };
 
     // 명시적으로 참조해 unused_imports 방지

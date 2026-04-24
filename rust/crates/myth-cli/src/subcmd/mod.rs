@@ -7,6 +7,7 @@ pub mod gavel;
 pub mod init;
 pub mod install;
 pub mod key;
+pub mod link;
 pub mod lesson;
 pub mod observer;
 pub mod run;

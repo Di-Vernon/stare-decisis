@@ -57,6 +57,10 @@ pub enum Command {
     Constitution(ConstitutionArgs),
     /// Manage Anthropic API key (Milestone A — stub)
     Key(KeyArgs),
+    /// Link myth hooks into a Claude Code project's .claude/settings.json
+    Link(LinkArgs),
+    /// Remove myth hooks from a Claude Code project's .claude/settings.json
+    Unlink(UnlinkArgs),
 }
 
 #[derive(Args, Debug)]
@@ -219,6 +223,20 @@ pub enum KeyAction {
     },
     Show,
     Clear,
+}
+
+#[derive(Args, Debug)]
+pub struct LinkArgs {
+    /// Project path (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Args, Debug)]
+pub struct UnlinkArgs {
+    /// Project path (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
 }
 
 #[cfg(test)]

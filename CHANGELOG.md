@@ -5,6 +5,33 @@ All notable changes to myth are recorded here. The format follows
 wave-by-wave traceability back to the `docs/09-CLAUDE-PROMPTS.md` build
 plan.
 
+## [0.1.1] — 2026-04-25
+
+### Added
+
+- **`myth link [PATH]`** subcommand: wire myth hooks into a Claude Code
+  project's `.claude/settings(.local).json`. Non-destructive (preserves
+  existing third-party entries), idempotent, and atomic (tmp-file +
+  rename). Creates a `*.pre-myth-<timestamp>` backup before each write.
+  Targets `settings.local.json` in preference to `settings.json`.
+- **`myth unlink [PATH]`** subcommand: remove myth hook entries from a
+  project. Non-myth entries preserved; empty event keys dropped so
+  repeated link/unlink cycles don't accumulate schema noise.
+
+### Deprecated
+
+- `scripts/install_myth_to_project.sh` — superseded by `myth link`.
+  Script still functions during the grace period but prints a
+  deprecation warning on invocation. Scheduled for removal in v0.2.
+
+### Fixed
+
+- `install_myth_to_project.sh` destructively replaced the entire
+  `hooks` key in `settings(.local).json`, erasing unrelated third-party
+  hook entries. `myth link` preserves all non-myth entries.
+
+---
+
 ## [0.1.0] — Day-1 (pending v0.1.0 tag)
 
 ### Release shape

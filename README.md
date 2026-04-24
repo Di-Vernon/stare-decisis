@@ -56,7 +56,8 @@ bash scripts/install.sh
 
 # First project:
 cd ~/project/my-project
-myth init
+myth init       # scaffolds .claude/
+myth link       # wires myth hooks into .claude/settings(.local).json
 myth run        # wraps Claude Code with myth supervision
 ```
 
@@ -69,6 +70,10 @@ myth status
 ## Everyday use
 
 ```bash
+# Wire / unwire myth hooks in a Claude Code project
+myth link [PATH]          # wire myth hooks into a Claude Code project
+myth unlink [PATH]        # remove myth hooks from a project
+
 # Start a myth-supervised Claude Code session
 myth run
 
