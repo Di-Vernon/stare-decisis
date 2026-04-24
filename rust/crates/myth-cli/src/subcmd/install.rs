@@ -28,7 +28,7 @@ pub async fn run(args: InstallArgs) -> Result<ExitCode> {
     let rust_target = locate_rust_target()?;
     let repo_root = rust_target
         .ancestors()
-        .nth(2)
+        .nth(3)
         .ok_or_else(|| anyhow!("cannot derive repo root from {}", rust_target.display()))?
         .to_path_buf();
 
@@ -293,7 +293,18 @@ fn init_myth_home() -> Result<()> {
         )?;
     }
     if !home.join("surface-rules.yaml").exists() {
-        std::fs::write(home.join("surface-rules.yaml"), "rules: []\n")?;
+        std::fs::write(
+            home.join("surface-rules.yaml"),
+            "# myth — Surface Rule 카탈로그 (초기 상태 = 빈 상태)\n\
+             #\n\
+             # Surface Rule은 사용자가 사용하면서 쌓는 lessons. 초기값은 빈 상태로 시작하고\n\
+             # assessor 와 user_prompt hook 가 lesson-state.jsonl 을 기반으로 append 한다.\n\
+             #\n\
+             # Schema: myth-gavel/src/rules/compile.rs RuleFile { version: u32, items: Vec<RuleItem> }\n\
+             \n\
+             version: 1\n\
+             items: []\n",
+        )?;
     }
     if !home.join("grid.yaml").exists() {
         std::fs::write(
