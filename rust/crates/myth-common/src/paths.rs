@@ -69,6 +69,14 @@ pub fn caselog_path() -> PathBuf {
     myth_home().join("caselog.jsonl")
 }
 
+/// Anthropic API key store. Plain-text key=value file with 0600
+/// permissions (Phase 5 Stage B.2 migration). v0.3+ may move to
+/// OS keychain (macOS Keychain, GNOME Secret Service, Windows Credential
+/// Manager) — until then keep it explicit and inspectable.
+pub fn credentials_path() -> PathBuf {
+    myth_home().join("credentials")
+}
+
 pub fn lesson_state_path() -> PathBuf {
     myth_home().join("lesson-state.jsonl")
 }
