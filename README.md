@@ -1,172 +1,205 @@
-# myth
+# stare-decisis
 
-> Local AI agent orchestrator wrapping Claude Code.  
-> A self-improving learning system that watches your tool failures, classifies them, and compiles the lessons into law.
+> A Claude Code orchestrator where past failures become binding precedent.
 
-```
-완벽은 도달이 아니라 수렴이다.
-수렴은 우연이 아니라 법이다.
+**⚠️ v0.1.1 — early testing phase. Not production-ready. Actively looking for testers and feedback.**
+
+---
+
+## What is this?
+
+`stare-decisis` turns Claude Code's hook system into a learning governance layer. When a tool call fails, the system records the pattern. On future runs, similar patterns trigger just-in-time context injection — Claude sees the precedent before making the same mistake twice.
+
+The name comes from the common-law principle *stare decisis et non quieta movere* — "to stand by things decided and not disturb what is settled." Every resolved failure becomes binding precedent for what follows.
+
+## Why?
+
+Claude Code is powerful but has no cross-session memory of what went wrong. Repeat the same kind of mistake → repeat the same kind of fix. This project addresses that gap with four principles:
+
+- **Remembers** failures without leaking them to unrelated sessions
+- **Injects** relevant precedent just-in-time, not as permanent prompt bloat
+- **Refuses** a narrow set of catastrophic patterns outright (the never-list)
+- **Appeals** — a precedent you disagree with can be overturned
+
+It runs as a hook layer around `claude`, not a replacement. Your existing Claude Code workflow keeps working exactly as before.
+
+## How it works
+
+Three tiers, intentionally ordered by cost and latency:
+
+| Tier | Role | Tech | Latency |
+|------|------|------|---------|
+| **Trial Court** | Pattern match; allow / block / warn | Rust binary + YAML rules | < 50 ms |
+| **Reflector** | Failure → lesson extraction | Claude Haiku (API) | ~2 s per failure |
+| **Curator** | Weekly precedent consolidation | Claude Sonnet (API) | weekly batch |
+
+Trial Court runs on every tool call and needs no network. Reflector runs only when a failure is observed. Curator runs weekly to merge, retire, and rank precedents. No data leaves your machine unless Reflector or Curator is invoked — both require an Anthropic API key and use pay-per-call pricing.
+
+> Production cost benchmarks are not yet published. Expect early releases to optimize for correctness over cost; tune after observation.
+
+---
+
+## Quick start — let Claude install it for you
+
+The easiest way to try `stare-decisis` is to hand [**give-claude.md**](give-claude.md) to Claude. Claude will walk you through installation, first run, and feedback — no other prompts required from you.
+
+**Recommended**: paste into **Claude Code** in a new terminal for hands-free setup.
+**Also works**: claude.ai, Claude Desktop, or any Claude interface (Claude will hand you commands to run yourself).
+
+```text
+1. Open give-claude.md in this repo
+2. Copy the entire file
+3. Paste into a new Claude session
+4. Follow along
 ```
 
 ---
 
-## What myth does
+## Manual installation
 
-myth is **three things** working at three time scales:
+If you prefer to install by hand:
 
-**The Gavel** (milliseconds). Before each tool call, 47 regex patterns check for catastrophic commands — `rm -rf /`, production secret leaks, auth bypasses. Catches these before they happen.
+### Prerequisites
 
-**Assessor** (seconds). When a tool fails, Claude Haiku analyzes the failure along 5 axes (blast radius, reversibility, likelihood, category, uplift) and produces a structured verdict: Level 1–5, severity-adjusted.
+- Linux or WSL2 Ubuntu (macOS best-effort, not tested)
+- Rust **1.82+** (edition 2021)
+- Python **3.11+**
+- Claude Code **2.1.27+** (PostToolUseFailure hook is required)
+- `git`, `cargo`, `clang`, `mold`
+- `~/.local/bin` on your `PATH`
 
-**Observer** (weekly). Claude Sonnet reviews every accumulated lesson, finds patterns, updates a brief that gets injected into each new session, and reports migration readiness for 5 system evolution thresholds.
+SQLite is bundled into the Rust binary via `rusqlite`, so no system SQLite install is needed.
 
-All three work together in a **separation-of-powers** architecture. The Gavel acts but cannot interpret. Assessor interprets but cannot block. Observer sees the whole picture but cannot change anything without your approval.
-
-## Why it exists
-
-Using Claude Code over time accumulates three problems:
-
-**Repeated mistakes**. The same heredoc quoting issue, the same missing Python venv, the same dangerous `rm -rf` — Claude forgets between sessions. You give the same feedback repeatedly.
-
-**Missing catastrophic guards**. Claude Code itself has limited awareness of "this command causes irreversible damage." The commands need to be stopped *before* execution, not after.
-
-**Unstructured learning**. Some failures are Level 1 (style). Some are Level 5 (data loss). Without structure, both end up as equal-weight notes — noise.
-
-myth is the local answer to these problems.
-
-## Status
-
-**Version**: v0.1.0 (Day-1 release, pending build)  
-**Platform**: WSL2 Ubuntu 24.04 + Claude Code 2.1.27+  
-**Language**: Rust (60%) + Python (30%) + Shell (10%)  
-**License**: MIT OR Apache-2.0
-
-## Install
+### Install binaries
 
 ```bash
-# Prerequisites (see WSL2-SETUP.md for full details):
-# - WSL2 Ubuntu 24.04
-# - Rust stable, mold linker, clang
-# - Python 3.11+, tmux
-# - Claude Code 2.1.27+
-
-git clone https://github.com/Di-Vernon/myth.git ~/myth
-cd ~/myth
-bash scripts/install.sh
-
-# First project:
-cd ~/project/my-project
-myth init       # scaffolds .claude/
-myth link       # wires myth hooks into .claude/settings(.local).json
-myth run        # wraps Claude Code with myth supervision
+git clone https://github.com/Di-Vernon/stare-decisis.git ~/stare-decisis
+cd ~/stare-decisis/rust
+cargo build --release
+./target/release/myth install
 ```
+
+This symlinks binaries to `~/.local/bin` and initializes `~/.myth/` with rule templates and a SQLite state DB.
 
 Verify:
+
 ```bash
-myth doctor     # all checks green?
-myth status
+myth doctor
 ```
 
-## Everyday use
+Expected output: 4–5 `[ok]` lines, possibly one `[warn]` about the embed socket (auto-spawned on first use — not an error).
+
+### Wire hooks into a test project
+
+From inside a Claude Code project:
 
 ```bash
-# Wire / unwire myth hooks in a Claude Code project
+myth link
+```
+
+This registers six myth hooks into the project's `.claude/settings.json` (or `.claude/settings.local.json` if it already exists — myth prefers the local file).
+
+Properties you can rely on:
+- **Non-destructive** — any existing non-myth hook entries are preserved
+- **Idempotent** — safe to re-run; duplicate myth entries will not be created
+- **Backed up** — the original settings file is copied to `.pre-myth-{timestamp}` before modification
+- **Atomic** — write happens via temp file + rename, no partial-write corruption
+
+Open the settings file after running to see what was added.
+
+To unwire:
+
+```bash
+myth unlink
+```
+
+This removes only the myth-authored entries; anything else in `.claude/settings.json` stays untouched.
+
+> ⚠️ **Use a sandbox project, not production**, for early testing. Shadow mode is safe-by-design but v0.1.1 is experimental.
+
+### Everyday commands
+
+```bash
 myth link [PATH]          # wire myth hooks into a Claude Code project
 myth unlink [PATH]        # remove myth hooks from a project
-
-# Start a myth-supervised Claude Code session
-myth run
-
-# Check what's happening right now
-myth status
-
-# Full TUI dashboard
-myth watch
-
-# Lesson management
-myth lesson list
-myth lesson show <id>
-myth lesson appeal <id> --reason "this was actually correct"
-
-# Run weekly analysis (usually automated)
-myth observer run
-
-# Health check
-myth doctor
-myth doctor --migration    # Milestone readiness
+myth status               # what's been captured
+myth lesson list          # current precedent pool
+myth doctor               # health check
+myth uninstall            # reverse binary install
+myth constitution         # open CONSTITUTION.md in $PAGER
 ```
 
-## Directory layout
+See `myth --help` for the full command surface.
 
-```
-~/myth/                    # source (this repo)
-~/.local/bin/myth*         # 8 installed binaries
-~/.config/myth/            # user config + API key
-~/.myth/                   # runtime data (rules, SQLite, JSONL logs)
-~/.local/state/myth/       # ephemeral state (latency logs, daemon logs)
-$XDG_RUNTIME_DIR/myth/     # Unix sockets (tmpfs)
-```
+---
 
-Full details: [`docs/03-DIRECTORY.md`](docs/03-DIRECTORY.md).
+## What to expect in v0.1.x (shadow mode)
 
-## Key concepts
+This release series is deliberately conservative:
 
-Read these in order if you're new:
+- **Observation-first.** Hooks record envelopes and failure patterns to a local SQLite database. No blocking, no context injection — just data collection.
+- **Never-list is active.** A small hand-curated set of universally-catastrophic patterns (e.g. `rm -rf /`) is blocked regardless of mode. This is the one exception to shadow mode.
+- **No silent network calls.** Reflector and Curator only run when you explicitly invoke them.
+- **Your workflow is unchanged.** If `stare-decisis` did nothing at all, you'd still have `claude` doing what it always did.
 
-1. [`docs/02-CONCEPTS.md`](docs/02-CONCEPTS.md) — terminology (The Gavel, Assessor, Observer, Bedrock/Foundation/Surface, Level, Recurrence, Enforcement, Lapse, Milestone, etc.)
-2. [`docs/01-OVERVIEW.md`](docs/01-OVERVIEW.md) — what myth does and doesn't do
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — execution model, API contracts, Milestone transitions
+The 21-day shadow period is about **calibration** — learning what normal looks like for your project before flipping any enforcement switches.
+
+---
 
 ## Philosophy
 
-myth is built on three converging ideas:
+> Perfection is not arrival. Perfection is convergence. Convergence is not accident. Convergence is law.
 
-**Legal theory.** Beccaria ("certainty over severity"), Montesquieu (separation of powers), Ayres-Braithwaite's responsive regulation pyramid. The system enforces gently first, harder only when patterns repeat.
+Precedents are never prescribed in advance. The system starts rough and converges through use — closer to how case law accumulates than to how a static rulebook is written. Two design consequences:
 
-**Rough Start.** No feature gets built on speculation. Everything on Day-1 is either actively used or has measurable conditions for activation (the Milestone system). Don't optimize what you can't measure.
+1. **Pre-blocking only for Level 5 (catastrophic) patterns.** Everything below that emerges from actual failures observed in actual sessions.
+2. **Seeding from public failure data.** No governance system ever started from nothing. Initial precedents draw on publicly-available Claude Code error patterns.
 
-**Convergence as law.** The master principle: perfection is not reached, it is converged upon. Convergence is not accidental, it is lawful. myth is the mechanism that makes the convergence lawful.
-
-Full constitution: [`CONSTITUTION.md`](CONSTITUTION.md).
-
-## What myth is not
-
-- **Not a replacement for Claude Code.** myth wraps it, doesn't replace it. Claude Code's features work normally.
-- **Not a code linter, refactorer, or formatter.** Those are Claude Code's job.
-- **Not a network agent.** Runs entirely locally. The only external call is the optional Anthropic API (disabled by default).
-- **Not a team tool.** v1 is single-user. Team sync is a separate project.
-- **Not a replacement for your judgment.** Observer recommends. You decide.
-
-## Milestones (system evolution)
-
-myth uses measured conditions (not time) to decide when to evolve:
-
-| Milestone | Condition | What happens |
-|---|---|---|
-| **A** | 3 weeks of use, analyze Tier 1 compliance | Activate Assessor Tier 2/3 if compliance < 85% |
-| **B** | 20K lessons AND vector KNN P99 > 50ms | Migrate to sqlite-vec or usearch |
-| **C** | Hook P99 > 15ms for 2 weeks + build profile applied + WSL2 green + PGO attempted | Switch The Gavel to daemon mode |
-| **D** | Observer reports Bedrock misses | Activate semantic detection |
-| **E** | Semantic FP > 5% or FN > 2% | Add AST-based validation |
-
-Full details: [`ARCHITECTURE.md`](ARCHITECTURE.md) §4.
-
-## Documentation
-
-All design documents live in [`docs/`](docs/). Start at [`docs/00-INDEX.md`](docs/00-INDEX.md) for full navigation.
-
-For implementers (Claude Code): start at [`docs/09-CLAUDE-PROMPTS.md`](docs/09-CLAUDE-PROMPTS.md).
-
-## Attribution
-
-myth builds on [gitleaks](https://github.com/gitleaks/gitleaks) (MIT) for Bedrock Rule regex patterns, [detect-secrets](https://github.com/Yelp/detect-secrets) (Apache-2.0) for keyword+entropy heuristics, and [multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (MIT, Microsoft Research) for identity embeddings. Full attribution: [`THIRD-PARTY.md`](THIRD-PARTY.md).
-
-## License
-
-MIT OR Apache-2.0 (dual, your choice).
+See [`CONSTITUTION.md`](CONSTITUTION.md) for the full design document.
 
 ---
 
-**Author**: Jeffrey (Di-Vernon)  
-**Repository**: https://github.com/Di-Vernon/myth  
-**Constitution**: [`CONSTITUTION.md`](CONSTITUTION.md)
+## Known limitations
+
+- **Pattern identity** is currently SHA1-based string hashing. Embedding-based identity is in active development.
+- **Appeal interface** is CLI only — no web UI yet.
+- **Cross-project learning** not yet supported — each project has its own precedent database.
+- **Stub commands**: `myth gavel`, `myth lesson split`, `myth lesson merge`, and parts of `myth key` are placeholders for future milestones.
+- **Documentation** is being reorganized from internal-first to external-first; some pages still assume project history.
+
+---
+
+## Feedback
+
+This is the whole point of the testing phase. All of these are welcome:
+
+- 🐛 **Bugs** → [GitHub Issues](https://github.com/Di-Vernon/stare-decisis/issues), label `bug`
+- 💡 **Feature requests** → same place, label `enhancement`
+- 🧠 **Precedent-quality observations** → label `precedent-quality`. These are the highest-signal feedback.
+- 🎭 **False positives** (something was blocked that shouldn't have been) → label `false-positive` with a minimal repro.
+- 💬 **Open-ended discussion** → [GitHub Discussions](https://github.com/Di-Vernon/stare-decisis/discussions) (if enabled)
+
+---
+
+## Roadmap
+
+- **v0.1.x** (current) — Shadow-mode stabilization; Day-1 hook contract frozen; `myth link` / `myth unlink` CLI integration.
+- **v0.2** — Remand integration (experimental: failed actions get a second attempt with precedent context).
+- **v0.3** — Dirty working-tree warnings; security-context generalization; cross-platform polish.
+- **v1.0** — Embedding-based identity; web appeal UI; multi-project precedent sharing.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release history.
+
+---
+
+## A note on naming
+
+The repository is `stare-decisis` but the internal crate, CLI binary, and Python package are named `myth`. You will see both. This is a rename-in-progress from the pre-public era; the internal name will eventually align with the repo name.
+
+## License
+
+[MIT](LICENSE). Third-party notices: [`NOTICE`](NOTICE) and [`THIRD-PARTY.md`](THIRD-PARTY.md).
+
+---
+
+**Not affiliated with Anthropic.** `stare-decisis` is a community tool built on Claude Code's official extension points (hooks, subagents, MCP, skills). The name "Claude" and related marks are property of Anthropic.
