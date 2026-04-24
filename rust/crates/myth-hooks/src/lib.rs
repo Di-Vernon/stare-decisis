@@ -9,6 +9,7 @@
 
 pub mod core;
 pub mod records;
+pub mod remand;
 pub mod templates;
 pub mod tier0;
 pub mod tier3_dispatch;
