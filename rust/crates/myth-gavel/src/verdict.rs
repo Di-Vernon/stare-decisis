@@ -12,6 +12,10 @@ pub struct Verdict {
     pub rule_match: Option<RuleMatch>,
     pub lesson_id: Option<LessonId>,
     pub rationale: String,
+    /// Subtleness score [0, 1] from Tier 3 assessor. `None` until
+    /// Milestone A activation. See `experiment/remand-prototype/design/
+    /// CONSTITUTION-v2.4-remand-draft.md` Part VII Section 2.3.
+    pub subtleness_score: Option<f32>,
 }
 
 impl Verdict {
@@ -21,6 +25,7 @@ impl Verdict {
             rule_match: None,
             lesson_id: None,
             rationale: String::new(),
+            subtleness_score: None,
         }
     }
 
@@ -35,6 +40,7 @@ impl Verdict {
             rule_match: Some(rule_match),
             lesson_id: None,
             rationale,
+            subtleness_score: None,
         }
     }
 
@@ -55,6 +61,7 @@ impl Verdict {
             rule_match: Some(rule_match),
             lesson_id,
             rationale,
+            subtleness_score: None,
         }
     }
 
@@ -73,7 +80,10 @@ impl Verdict {
                     "additionalContext": self.rationale,
                 }
             }),
-            Enforcement::Warn => json!({
+            // Remand variant is reserved for Milestone A activation. In
+            // v0.2 it must never fire; if it does, demote to Warn-equivalent
+            // hook output as a fail-safe (CONSTITUTION v2.4 draft VII.2.6).
+            Enforcement::Warn | Enforcement::Remand => json!({
                 "continue": true,
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",

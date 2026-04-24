@@ -38,7 +38,9 @@ fn db_verdict_from(enforcement: Enforcement) -> DbVerdict {
         | Enforcement::Note
         | Enforcement::Advisory
         | Enforcement::Caution => DbVerdict::Allow,
-        Enforcement::Warn => DbVerdict::Ask,
+        // Remand is reserved for Milestone A; if it ever escapes the Gavel
+        // demotion guard in v0.2 we record it as Ask, identical to Warn.
+        Enforcement::Warn | Enforcement::Remand => DbVerdict::Ask,
         Enforcement::Strike | Enforcement::Seal => DbVerdict::Deny,
     }
 }
@@ -88,7 +90,11 @@ fn main() -> ExitCode {
         let result = match verdict.enforcement {
             Enforcement::Dismiss | Enforcement::Note => HookResult::Allow,
             Enforcement::Advisory | Enforcement::Caution => HookResult::AllowWithContext(json),
-            Enforcement::Warn => HookResult::Ask(json),
+            // Remand is reserved (Milestone A). The Gavel demotion guard
+            // ensures we never reach this arm in v0.2; the explicit case
+            // exists to keep the match exhaustive after the enum
+            // expansion (see `experiment/remand-prototype/`).
+            Enforcement::Warn | Enforcement::Remand => HookResult::Ask(json),
             Enforcement::Strike | Enforcement::Seal => HookResult::Block { output: json },
         };
 

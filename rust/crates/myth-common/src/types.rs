@@ -59,6 +59,13 @@ pub enum Enforcement {
     Advisory,
     Caution,
     Warn,
+    /// Reserved for v0.3+ Selective Remand activation.
+    /// Requires Tier 3 subtleness classifier (Milestone A).
+    /// Gavel never emits this variant in v0.2; if accidentally constructed
+    /// it is demoted to `Warn` at hook output time.
+    /// See `experiment/remand-prototype/results/FINAL_REPORT.md`.
+    #[allow(dead_code)]
+    Remand,
     Strike,
     Seal,
 }
@@ -75,6 +82,7 @@ impl Enforcement {
             Self::Advisory => "권고",
             Self::Caution => "주의",
             Self::Warn => "경고",
+            Self::Remand => "환송",
             Self::Strike => "차단",
             Self::Seal => "봉인",
         }

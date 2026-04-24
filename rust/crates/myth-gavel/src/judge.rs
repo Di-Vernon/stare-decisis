@@ -135,6 +135,7 @@ impl Gavel {
                 rule_match: Some(m),
                 lesson_id,
                 rationale: String::new(),
+                subtleness_score: None,
             }
         } else {
             Verdict::with_enforcement(final_enforcement, m, lesson_id)
