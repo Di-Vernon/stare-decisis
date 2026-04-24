@@ -35,3 +35,8 @@ Thumbs.db
 
 # myth runtime artifacts (should live outside repo, but guard anyway)
 .myth/
+
+# Pending review for public release (v0.1.0 testing phase)
+corpus/
+experiment/
+scripts/corpus_fp_hunt.sh
