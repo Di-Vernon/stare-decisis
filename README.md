@@ -2,7 +2,11 @@
 
 > A Claude Code orchestrator where past failures become binding precedent.
 
-**⚠️ v0.1.1 — early testing phase. Not production-ready. Actively looking for testers and feedback.**
+> [!WARNING]
+> **v1 is archived. Do not install it.** The v1 code below (tag [`v0.1.1`](https://github.com/Di-Vernon/stare-decisis/tree/v0.1.1)) has known design defects and is kept for reference only.
+> myth v2 is being redesigned from scratch on this branch. Design documents and decision records live in [`docs/v2/`](docs/v2/README.md). The first v2 release will be `0.2.0`.
+>
+> The rest of this README describes v1.
 
 ---
 
