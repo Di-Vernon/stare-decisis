@@ -18,3 +18,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0006](adr/0006-audit-excludes-intent-misreading.md) | intent 오독은 audit 대상에서 제외 | 확정 |
 | [0007](adr/0007-audit-staged-rollout.md) | audit 단계 도입 — M0에는 A0·A1만 | 확정 |
 | [0008](adr/0008-audit-a0-checks.md) | A0 결정적 검사 목록 | 확정 |
+| [0009](adr/0009-completion-report.md) | completion report 형식 | 확정 |
