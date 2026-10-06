@@ -440,6 +440,6 @@ uv pip list --format=json | jq
 
 ## 참고
 
-- **myth 본체 라이선스**: `~/myth/LICENSE` (MIT 전문과 Apache-2.0 전문 각각)
+- **myth 본체 라이선스**: `~/myth/LICENSE-MIT`, `~/myth/LICENSE-APACHE` (MIT OR Apache-2.0 중 택일)
 - **cargo-license 보고서**: `~/myth/LICENSES.txt` (빌드 시 자동 갱신)
 - **NOTICE 파일**: `~/myth/NOTICE`

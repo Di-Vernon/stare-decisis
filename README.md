@@ -202,7 +202,7 @@ The repository is `stare-decisis` but the internal crate, CLI binary, and Python
 
 ## License
 
-[MIT](LICENSE). Third-party notices: [`NOTICE`](NOTICE) and [`THIRD-PARTY.md`](THIRD-PARTY.md).
+Dual-licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. Third-party notices: [`NOTICE`](NOTICE) and [`THIRD-PARTY.md`](THIRD-PARTY.md).
 
 ---
 

@@ -11,3 +11,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 |---|---|---|
 | [0001](adr/0001-build-vs-fork.md) | Build vs Fork — 자체 구축 | 확정 |
 | [0002](adr/0002-repository-strategy.md) | 저장소 전략 — 같은 repo의 main에서 진행 | 확정 |
+| [0003](adr/0003-license-files.md) | 라이선스 파일 분리 | 확정 |
