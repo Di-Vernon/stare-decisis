@@ -15,3 +15,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0003](adr/0003-license-files.md) | 라이선스 파일 분리 | 확정 |
 | [0004](adr/0004-terminology.md) | 용어 규칙 — 신조어 원문 표기 | 확정 |
 | [0005](adr/0005-audit-role.md) | audit의 지위 — evidence sensor이자 ladder 한 칸 | 확정 |
+| [0006](adr/0006-audit-excludes-intent-misreading.md) | intent 오독은 audit 대상에서 제외 | 확정 |
