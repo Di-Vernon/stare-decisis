@@ -19,3 +19,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0007](adr/0007-audit-staged-rollout.md) | audit 단계 도입 — M0에는 A0·A1만 | 확정 |
 | [0008](adr/0008-audit-a0-checks.md) | A0 결정적 검사 목록 | 확정 |
 | [0009](adr/0009-completion-report.md) | completion report 형식 | 확정 |
+| [0010](adr/0010-change-tree.md) | change tree — 변경 사항을 기록으로 렌더링 | 확정 |
