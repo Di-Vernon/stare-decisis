@@ -14,3 +14,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0002](adr/0002-repository-strategy.md) | 저장소 전략 — 같은 repo의 main에서 진행 | 확정 |
 | [0003](adr/0003-license-files.md) | 라이선스 파일 분리 | 확정 |
 | [0004](adr/0004-terminology.md) | 용어 규칙 — 신조어 원문 표기 | 확정 |
+| [0005](adr/0005-audit-role.md) | audit의 지위 — evidence sensor이자 ladder 한 칸 | 확정 |
