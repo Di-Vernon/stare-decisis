@@ -25,3 +25,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0013](adr/0013-stack-ts-mod-plugin.md) | 스택 — TypeScript mod 중심 Claude Code plugin | 확정 |
 | [0014](adr/0014-storage.md) | 저장 형식 — `~/.myth/` 불변 파일 event sourcing | 확정 |
 | [0015](adr/0015-llm-path-and-model.md) | LLM 사용 — 승격 제안 시 holding 초안만, 세션 모델에 fork | 확정 |
+| [0016](adr/0016-behavior-only-detection.md) | 감지는 행동 신호로만 — 초기 버전에 어휘 사전 없음 | 확정 |
