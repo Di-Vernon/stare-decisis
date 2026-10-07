@@ -23,3 +23,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0011](adr/0011-audit-protected-paths.md) | 보호 대상 — restraint lock 확장 | 확정 |
 | [0012](adr/0012-audit-a1-labeling.md) | A1 라벨 수집과 차단 권한 해제 기준 | 확정 |
 | [0013](adr/0013-stack-ts-mod-plugin.md) | 스택 — TypeScript mod 중심 Claude Code plugin | 확정 |
+| [0014](adr/0014-storage.md) | 저장 형식 — `~/.myth/` 불변 파일 event sourcing | 확정 |
