@@ -1,7 +1,7 @@
 # ADR-0009 — completion report 형식
 
 - 날짜: 2026-10-06
-- 상태: 확정 (Jeffrey 비준)
+- 상태: 확정 (Jeffrey 비준). 형식은 보완됨(→ ADR-0017)
 - 관련: audit 설계 D5
 
 ## 맥락

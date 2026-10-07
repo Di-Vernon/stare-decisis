@@ -17,8 +17,8 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0005](adr/0005-audit-role.md) | audit의 지위 — evidence sensor이자 ladder 한 칸 | 확정 |
 | [0006](adr/0006-audit-excludes-intent-misreading.md) | intent 오독은 audit 대상에서 제외 | 확정 |
 | [0007](adr/0007-audit-staged-rollout.md) | audit 단계 도입 — M0에는 A0·A1만 | 확정 |
-| [0008](adr/0008-audit-a0-checks.md) | A0 결정적 검사 목록 | 확정 |
-| [0009](adr/0009-completion-report.md) | completion report 형식 | 확정 |
+| [0008](adr/0008-audit-a0-checks.md) | A0 결정적 검사 목록 | 확정, 일부 대체됨(→ ADR-0017) |
+| [0009](adr/0009-completion-report.md) | completion report 형식 | 확정, 보완됨(→ ADR-0017) |
 | [0010](adr/0010-change-tree.md) | change tree — 변경 사항을 기록으로 렌더링 | 확정 |
 | [0011](adr/0011-audit-protected-paths.md) | 보호 대상 — restraint lock 확장 | 확정 |
 | [0012](adr/0012-audit-a1-labeling.md) | A1 라벨 수집과 차단 권한 해제 기준 | 확정 |
@@ -26,3 +26,4 @@ myth v2는 재설계 중이다. v1(`v0.1.1`)은 아카이브 상태다. 이 디�
 | [0014](adr/0014-storage.md) | 저장 형식 — `~/.myth/` 불변 파일 event sourcing | 확정 |
 | [0015](adr/0015-llm-path-and-model.md) | LLM 사용 — 승격 제안 시 holding 초안만, 세션 모델에 fork | 확정 |
 | [0016](adr/0016-behavior-only-detection.md) | 감지는 행동 신호로만 — 초기 버전에 어휘 사전 없음 | 확정 |
+| [0017](adr/0017-verified-fixed-format.md) | completion report 고정 형식 — claim 구조적 파싱 | 확정 |
