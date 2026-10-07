@@ -415,6 +415,7 @@ src/
 - **항상 막는 대상**: myth 설정·데이터(`~/.myth/**`, `~/.claude/rules/myth/**`), `.claude/settings*.json`, (A2 이후) intent contract 파일
   - mod의 `tool.call` deny와 정적 `permissions.deny`를 함께 건다. 정적 쪽이 degraded mode의 미러다.
   - 보안 판정이므로 판정이 실패하면 deny한다.
+  - Bash를 통한 우회를 어디까지 막을 수 있는지는 [열림 K10]이다.
   - `~/.claude/rules/myth/**`를 포함하는 것은 [제안]이다. L1 정적 미러가 그 위치에 생기기 때문이다.
 - **변경 경로**: myth의 변경은 Claude의 도구가 아니라 mod의 `$.fs`와 `/myth` 명령으로만 한다. 에이전트가 호출할 수 있는 자기 승인 CLI는 두지 않는다. [ADR-0001 피할 것]
 - **설정 변경 감시**: `ConfigChange` hook으로 project/local 설정 변경을 막고 기록한다.
@@ -498,7 +499,7 @@ R1의 E2(한·영 하이브리드 감지 검증)는 ADR-0016으로 E2a로 대체
 
 ## 12. 열린 항목
 
-ADR들을 통합하면서 드러난 공백과 충돌이다. **M0 구현 전**에 정해야 하는 것은 K1~K4다.
+ADR들을 통합하면서 드러난 공백과 충돌이다. **M0 구현 전**에 정해야 하는 것은 K1~K4와 K10이다.
 
 | # | 항목 | 내용 | 시점 |
 |---|---|---|---|
@@ -511,6 +512,7 @@ ADR들을 통합하면서 드러난 공백과 충돌이다. **M0 구현 전**에
 | K7 | L1의 위치와 project scope | user-level `~/.claude/rules/`는 공식 지원된다. 그러나 user-level 규칙의 `paths` frontmatter가 무시된다는 버그 보고가 있다(anthropics/claude-code#21858, 2.1.25 기준, open). 또 user-level 규칙의 `paths`는 모든 프로젝트에 적용되므로, project scope precedent를 L1로 내릴 위치가 없다. 프로젝트 안 `.claude/rules/`에 쓰면 ADR-0014(프로젝트 안에 두지 않음)와 충돌한다 | S1 후 |
 | K8 | 정적 미러 쓰기 안전성 | `~/.claude/settings.json`에 원자적 쓰기가 없다. 백업, 되돌리기, 동시 쓰기 감지 방법이 필요하다 | S1 |
 | K9 | override 정의 | L2 경고는 context일 뿐이어서, 경고 뒤 같은 행동이 실행된 것이 정당한 override인지 재발인지 구분하기 어렵다 | E3 전 |
+| K10 | restraint lock의 Bash 우회 | 경로 기반 `permissions.deny`(Edit/Write 규칙)는 내장 파일 도구에 적용된다. Bash의 리다이렉션이나 `cp`·`sed -i`로 쓰는 것까지 막는다고 가정할 수 없다(플랫폼 사실 재확인 필요). mod의 `tool.call`에서 Bash 명령을 파싱해 보호 경로를 찾을 수는 있지만, 셸 파싱은 완전할 수 없다. 남는 방어는 SessionStart 해시 대조(탐지)다. sandbox 설정을 쓸지, 탐지로 만족할지 정해야 한다 | M0 전 |
 
 참고로, 통합 과정에서 다음은 **충돌이 아님**을 확인했다.
 
